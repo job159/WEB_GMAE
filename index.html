@@ -259,17 +259,32 @@
 
     <!-- 觸控操作層 -->
     <div id="touch-overlay" class="hidden">
+      <!-- 左下：搖桿 -->
       <div id="joystick-base"><div id="joystick-knob"></div></div>
-      <div id="touch-attack" class="touch-btn">攻擊</div>
-      <div id="touch-skills">
-        <div id="touch-q" class="touch-skill">Q</div>
-        <div id="touch-r" class="touch-skill">R</div>
-        <div id="touch-v" class="touch-skill">V</div>
+
+      <!-- 左上：採集 / 衝刺 -->
+      <div id="touch-left-top">
+        <div id="btn-touch-gather" class="touch-extra-btn">採集</div>
+        <div id="btn-touch-dash" class="touch-extra-btn">衝刺</div>
       </div>
+
+      <!-- 左中：鍛造 / 商店 / 技能 / 暫停 -->
       <div id="touch-extra">
-        <div id="btn-touch-build" class="touch-extra-btn">建</div>
-        <div id="btn-touch-shop" class="touch-extra-btn">店</div>
+        <div id="btn-touch-build" class="touch-extra-btn">鍛造</div>
+        <div id="btn-touch-shop" class="touch-extra-btn">商店</div>
+        <div id="btn-touch-skills" class="touch-extra-btn">技能</div>
+        <div id="btn-touch-pause" class="touch-extra-btn">暫停</div>
       </div>
+
+      <!-- 右側技能（Q/R/V）-->
+      <div id="touch-skills">
+        <div id="touch-q" class="touch-skill q">Q</div>
+        <div id="touch-r" class="touch-skill r">R</div>
+        <div id="touch-v" class="touch-skill v">V</div>
+      </div>
+
+      <!-- 右下：攻擊 -->
+      <div id="touch-attack" class="touch-btn">攻擊</div>
     </div>
 
     <div id="toast"></div>

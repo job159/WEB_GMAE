@@ -288,51 +288,161 @@ html, body {
 #big-toast { position: absolute; top: 80px; left: 50%; transform: translateX(-50%) scale(0.8); font-size: 36px; font-weight: bold; color: #ffd86b; text-shadow: 0 0 20px rgba(255,216,107,0.9), 0 0 40px rgba(255,140,40,0.5), 0 4px 0 #5a3a10; pointer-events: none; opacity: 0; transition: opacity 0.4s, transform 0.4s; z-index: 150; letter-spacing: 6px; }
 #big-toast.show { opacity: 1; transform: translateX(-50%) scale(1); }
 
-/* ===== Touch overlay ===== */
-#touch-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 80; }
-#touch-overlay > * { pointer-events: auto; }
+/* ============================================================
+ * 觸控操作優化版
+ * 重點：按下有視覺回饋（.active）、按鈕變大、布局更人體工學
+ * ============================================================ */
+#touch-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 80;
+  touch-action: none;
+}
+#touch-overlay > * { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+
+/* 觸控模式：隱藏 side panel、隱藏 hotbar（用觸控覆蓋層取代）*/
 body.touch-mode #side-panel { display: none; }
-body.touch-mode #game-container { grid-template-columns: 1fr; grid-template-areas: "top" "game" "hot"; }
-body.touch-mode #hotbar { font-size: 11px; }
+body.touch-mode #hotbar { display: none; }
+body.touch-mode #game-container {
+  grid-template-columns: 1fr;
+  grid-template-rows: 44px 1fr;
+  grid-template-areas: "top" "game";
+  padding: 3px;
+  gap: 3px;
+}
+
+/* 觸控模式上方狀態列更緊湊 */
+body.touch-mode #top-bar { font-size: 10px; padding: 2px 6px; gap: 5px; }
+body.touch-mode #top-bar .meter { width: 70px; height: 13px; }
+body.touch-mode #top-bar .text { font-size: 8px; }
+body.touch-mode #top-bar .stat { padding: 2px 5px; font-size: 10px; }
+
+/* ===== 搖桿（左下，最大按鈕）===== */
 #joystick-base {
-  position: absolute; left: 30px; bottom: 130px;
-  width: 130px; height: 130px;
-  background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
-  border-radius: 50%; touch-action: none;
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left, 0px) + 20px);
+  bottom: max(40px, env(safe-area-inset-bottom, 0px) + 30px);
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), rgba(0,0,0,0.25));
+  border: 3px solid rgba(255,255,255,0.45);
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+#joystick-base.active {
+  border-color: rgba(255,216,107,0.95);
+  box-shadow: 0 0 30px rgba(255,216,107,0.6);
 }
 #joystick-knob {
   position: absolute; left: 50%; top: 50%;
-  width: 60px; height: 60px;
-  background: rgba(255,216,107,0.6); border: 2px solid #fff;
-  border-radius: 50%; transform: translate(-50%, -50%);
+  width: 76px; height: 76px;
+  background: linear-gradient(180deg, rgba(255,216,107,0.95), rgba(200,140,40,0.95));
+  border: 3px solid #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
+
+/* ===== 攻擊鍵（右下，第二大按鈕）===== */
 .touch-btn {
-  position: absolute; right: 30px; bottom: 130px;
-  width: 100px; height: 100px;
-  background: rgba(255,90,90,0.6); border: 2px solid #fff;
+  position: absolute;
+  right: max(20px, env(safe-area-inset-right, 0px) + 20px);
+  bottom: max(40px, env(safe-area-inset-bottom, 0px) + 30px);
+  width: 130px; height: 130px;
+  background: radial-gradient(circle, rgba(255,90,90,0.7), rgba(160,30,30,0.85));
+  border: 4px solid #fff;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: bold; font-size: 18px;
-  touch-action: none;
+  color: #fff; font-weight: bold; font-size: 24px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 16px rgba(255,90,90,0.5);
+  transition: transform 0.05s, box-shadow 0.05s, background 0.05s;
+  letter-spacing: 2px;
 }
+.touch-btn.active {
+  background: radial-gradient(circle, rgba(255,200,200,0.95), rgba(220,80,80,0.95));
+  transform: scale(0.92);
+  box-shadow: 0 0 30px rgba(255,150,150,0.95);
+}
+
+/* ===== 技能 Q/R/V（攻擊鍵正上方一排）===== */
 #touch-skills {
-  position: absolute; right: 30px; bottom: 250px;
-  display: grid; grid-template-columns: repeat(3, 56px); gap: 8px;
+  position: absolute;
+  right: max(20px, env(safe-area-inset-right, 0px) + 20px);
+  bottom: max(195px, env(safe-area-inset-bottom, 0px) + 185px);
+  display: flex; gap: 12px;
 }
 .touch-skill {
-  width: 56px; height: 56px;
-  background: rgba(120,160,255,0.5); border: 2px solid #fff; border-radius: 50%;
+  width: 74px; height: 74px;
+  border: 3px solid rgba(255,255,255,0.85);
+  border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: bold; font-size: 16px;
-  touch-action: none;
+  color: #fff; font-weight: bold; font-size: 22px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+  letter-spacing: 1px;
+  transition: transform 0.05s, box-shadow 0.05s, background 0.05s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
-#touch-extra { position: absolute; left: 30px; bottom: 280px; display: flex; gap: 8px; }
+.touch-skill.q {
+  background: radial-gradient(circle, rgba(180,90,255,0.7), rgba(100,40,180,0.85));
+  box-shadow: 0 4px 12px rgba(180,90,255,0.4);
+}
+.touch-skill.r {
+  background: radial-gradient(circle, rgba(120,200,255,0.7), rgba(40,140,220,0.85));
+  box-shadow: 0 4px 12px rgba(120,200,255,0.4);
+}
+.touch-skill.v {
+  background: radial-gradient(circle, rgba(120,220,120,0.7), rgba(40,160,40,0.85));
+  box-shadow: 0 4px 12px rgba(120,220,120,0.4);
+}
+.touch-skill.active {
+  background: radial-gradient(circle, rgba(255,216,107,0.95), rgba(200,140,40,0.95)) !important;
+  transform: scale(0.88);
+  box-shadow: 0 0 24px rgba(255,216,107,0.95) !important;
+  color: #1a1a1a;
+  text-shadow: none;
+}
+
+/* ===== 左上：採集 / 衝刺（玩家走路常用）===== */
+#touch-left-top {
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left, 0px) + 20px);
+  top: 70px;
+  display: flex; gap: 10px;
+}
+#touch-left-top .touch-extra-btn {
+  width: 72px; height: 72px;
+  font-size: 16px;
+  background: radial-gradient(circle, rgba(120,180,90,0.7), rgba(60,120,40,0.85));
+  border-color: rgba(180,255,150,0.85);
+  box-shadow: 0 4px 12px rgba(120,180,90,0.4);
+}
+
+/* ===== 左中：選單按鈕（鍛造/商店/技能/暫停）===== */
+#touch-extra {
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left, 0px) + 20px);
+  top: 160px;
+  display: grid;
+  grid-template-columns: repeat(2, 64px);
+  gap: 8px;
+}
 .touch-extra-btn {
-  width: 56px; height: 56px;
-  background: rgba(204,102,255,0.5); border: 2px solid #fff; border-radius: 8px;
+  width: 64px; height: 64px;
+  background: radial-gradient(circle, rgba(180,120,200,0.7), rgba(110,50,140,0.85));
+  border: 3px solid rgba(255,255,255,0.75);
+  border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: bold; font-size: 16px;
+  color: #fff; font-weight: bold; font-size: 15px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  transition: transform 0.05s, box-shadow 0.05s, background 0.05s;
+}
+.touch-extra-btn.active {
+  background: radial-gradient(circle, rgba(255,216,107,0.95), rgba(200,140,40,0.95));
+  transform: scale(0.9);
+  box-shadow: 0 0 18px rgba(255,216,107,0.95);
+  color: #1a1a1a;
+  text-shadow: none;
 }
 
 /* ===== Colorblind 模式：紅 → 橘 ===== */
@@ -458,17 +568,39 @@ body.colorblind .red { color: #ffaa33 !important; }
 @media (max-width: 768px) {
   #game-container {
     grid-template-columns: 1fr;
-    grid-template-rows: 50px 1fr 80px;
-    grid-template-areas: "top" "game" "hot";
+    grid-template-rows: 44px 1fr;
+    grid-template-areas: "top" "game";
+    padding: 3px;
+    gap: 3px;
   }
   #side-panel { display: none; }
-  #top-bar { font-size: 10px; }
-  #hotbar .slot { width: 52px; height: 52px; }
-  #hotbar .name { font-size: 10px; }
+  #hotbar { display: none; }
+  #top-bar { font-size: 9px; padding: 2px 4px; gap: 4px; }
+  #top-bar .bar { gap: 2px; }
+  #top-bar .meter { width: 65px; height: 12px; }
+  #top-bar .text { font-size: 8px; }
+  #top-bar .stat { padding: 2px 4px; font-size: 9px; }
+
   .title-glow h1 { font-size: 52px; letter-spacing: 4px; }
   .fullscreen h1 { font-size: 36px; }
   .menu-buttons.stacked { max-width: 220px; }
   .fullscreen button { padding: 10px 20px; font-size: 14px; }
   .class-card { width: 280px; }
   .card-item { width: 90vw; max-width: 280px; }
+
+  /* overlay 在手機上窄一點 */
+  .overlay { min-width: 90vw; max-width: 95vw; padding: 16px 18px; }
+  .overlay.wide { min-width: 92vw; }
+  #shop-list { grid-template-columns: 1fr; }
+}
+
+/* 超窄螢幕（直立手機）進一步調整 */
+@media (max-width: 480px) {
+  #joystick-base { width: 140px; height: 140px; }
+  #joystick-knob { width: 64px; height: 64px; }
+  .touch-btn { width: 110px; height: 110px; font-size: 20px; }
+  .touch-skill { width: 64px; height: 64px; font-size: 18px; }
+  #touch-skills { gap: 8px; bottom: max(170px, env(safe-area-inset-bottom, 0px) + 160px); }
+  .touch-extra-btn { width: 56px; height: 56px; font-size: 13px; }
+  #touch-left-top .touch-extra-btn { width: 60px; height: 60px; font-size: 13px; }
 }
