@@ -3,11 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <title>荒野據點 Survival Outpost</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="description" content="2D 俯視角生存遊戲：採集、建造、撐過 15 波怪物與 3 個 Boss。三種職業、Roguelike 卡牌、成就、每日挑戰、NG+ 模式。" />
+  <meta name="theme-color" content="#ffd86b" />
+  <meta property="og:title" content="荒野據點 Survival Outpost" />
+  <meta property="og:description" content="2D 俯視角生存遊戲，純前端" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffd86b'/%3E%3Ctext x='16' y='22' font-size='20' text-anchor='middle' fill='%23222'%3E荒%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div id="game-container">
+
+    <!-- Splash -->
+    <div id="splash" class="fullscreen">
+      <div class="title-glow">
+        <h1>荒野據點</h1>
+        <h2>SURVIVAL OUTPOST</h2>
+      </div>
+    </div>
 
     <!-- 上方狀態列 -->
     <div id="top-bar">
@@ -33,148 +48,248 @@
       <div class="stat">技能點 <span id="ui-skill-pt">0</span></div>
       <div class="stat">擊殺 <span id="ui-kill">0</span></div>
       <div class="stat">分數 <span id="ui-score">0</span></div>
+      <div id="mode-badge" class="badge hidden">每日挑戰</div>
     </div>
 
-    <!-- 主畫面 -->
     <canvas id="game-canvas"></canvas>
 
-    <!-- 右側面板 -->
     <div id="side-panel">
       <h3>操作</h3>
       <div class="hint">WASD 移動 / 滑鼠左鍵 攻擊</div>
       <div class="hint">E 採集　B 建築　T 技能　N 商店</div>
-      <div class="hint">1/2/3 武器　Space 衝刺</div>
-      <div class="hint">Q/R/G/V 主動技能</div>
-      <div class="hint">P 暫停　F 存檔　L 讀檔</div>
-
+      <div class="hint">Space 衝刺　1/2/3 武器</div>
+      <div class="hint">Q/R/V 職業技能</div>
+      <div class="hint">P 暫停　F 存　L 讀</div>
       <h3>任務</h3>
       <ul id="quest-list"></ul>
-
       <h3>下一波</h3>
       <div id="next-wave-info">準備中...</div>
-
       <h3>戰況</h3>
       <div class="hint">連擊 <span id="ui-combo">0</span></div>
       <div class="hint">金幣加成 +<span id="ui-bonus">0</span>%</div>
     </div>
 
-    <!-- 下方武器快捷欄 -->
     <div id="hotbar">
-      <div class="slot" data-slot="1">
-        <div class="key">1</div><div class="name">斧頭</div><div class="sub">採集+</div>
-      </div>
-      <div class="slot" data-slot="2">
-        <div class="key">2</div><div class="name">鐵劍</div><div class="sub">高傷</div>
-      </div>
-      <div class="slot" data-slot="3">
-        <div class="key">3</div><div class="name">弓箭</div><div class="sub">遠程</div>
-      </div>
-
+      <div class="slot" data-slot="1"><div class="key">1</div><div class="name">斧頭</div></div>
+      <div class="slot" data-slot="2"><div class="key">2</div><div class="name">鐵劍</div></div>
+      <div class="slot" data-slot="3"><div class="key">3</div><div class="name">弓箭</div></div>
       <div class="divider"></div>
-
-      <!-- 主動技能 -->
-      <div class="slot skill" data-skill="q">
-        <div class="key">Q</div><div class="name">火球</div>
-        <div class="cd-overlay" id="cd-q"></div>
-      </div>
-      <div class="slot skill" data-skill="r">
-        <div class="key">R</div><div class="name">雷霆</div>
-        <div class="cd-overlay" id="cd-r"></div>
-      </div>
-      <div class="slot skill" data-skill="g">
-        <div class="key">G</div><div class="name">衝擊波</div>
-        <div class="cd-overlay" id="cd-g"></div>
-      </div>
-      <div class="slot skill" data-skill="v">
-        <div class="key">V</div><div class="name">治癒</div>
-        <div class="cd-overlay" id="cd-v"></div>
-      </div>
-      <div class="slot skill" data-skill="x">
-        <div class="key">X</div><div class="name">子彈雨</div>
-        <div class="cd-overlay" id="cd-x"></div>
-      </div>
-      <div class="slot skill" data-skill="c">
-        <div class="key">C</div><div class="name">鎖鏈</div>
-        <div class="cd-overlay" id="cd-c"></div>
-      </div>
-
+      <div class="slot skill" data-skill="q"><div class="key">Q</div><div class="name" id="skill-q-name">技能 1</div><div class="cd-overlay" id="cd-q"></div></div>
+      <div class="slot skill" data-skill="r"><div class="key">R</div><div class="name" id="skill-r-name">技能 2</div><div class="cd-overlay" id="cd-r"></div></div>
+      <div class="slot skill" data-skill="v"><div class="key">V</div><div class="name" id="skill-v-name">治癒</div><div class="cd-overlay" id="cd-v"></div></div>
       <div class="divider"></div>
-
       <div class="slot menu" data-slot="B"><div class="key">B</div><div class="name">建築</div></div>
       <div class="slot menu" data-slot="T"><div class="key">T</div><div class="name">技能</div></div>
       <div class="slot menu" data-slot="N"><div class="key">N</div><div class="name">商店</div></div>
     </div>
 
-    <!-- 建築選單 -->
+    <!-- ===== 主選單 ===== -->
+    <div id="main-menu" class="fullscreen hidden">
+      <div class="title-glow">
+        <h1>荒野據點</h1>
+        <h2>SURVIVAL OUTPOST</h2>
+      </div>
+      <div class="menu-buttons stacked">
+        <button id="btn-new-game">新遊戲</button>
+        <button id="btn-continue">繼續</button>
+        <button id="btn-daily">今日挑戰</button>
+        <button id="btn-ngplus">NG+ 模式</button>
+        <button id="btn-leaderboard">排行榜</button>
+        <button id="btn-achievements">成就</button>
+        <button id="btn-settings">設定</button>
+        <button id="btn-controls">操作說明</button>
+        <button id="btn-credits">製作群</button>
+      </div>
+
+      <!-- 雲端登入列 -->
+      <div id="cloud-bar">
+        <div id="cloud-status">未連線</div>
+        <div class="cloud-buttons">
+          <button id="btn-login-discord" class="cloud-btn">用 Discord 登入</button>
+          <button id="btn-login-google" class="cloud-btn">用 Google 登入</button>
+          <button id="btn-rename" class="cloud-btn hidden">改名</button>
+          <button id="btn-logout" class="cloud-btn hidden">登出</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 排行榜 -->
+    <div id="leaderboard-screen" class="fullscreen hidden">
+      <h1 class="gold">排行榜</h1>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-mode="normal">一般</button>
+        <button class="tab-btn" data-mode="daily">今日挑戰</button>
+        <button class="tab-btn" data-mode="ngplus">NG+</button>
+      </div>
+      <div id="leaderboard-list" class="lb-list">載入中...</div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 職業選擇 -->
+    <div id="class-select" class="fullscreen hidden">
+      <h1 class="gold">選擇職業</h1>
+      <div id="class-list"></div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 設定 -->
+    <div id="settings-screen" class="fullscreen hidden">
+      <h1 class="gold">設定</h1>
+      <div class="settings-list">
+        <div class="setting"><label>主音量　<span id="vol-master-v">80</span>%</label>
+          <input type="range" id="vol-master" min="0" max="100"></div>
+        <div class="setting"><label>音效音量　<span id="vol-sfx-v">70</span>%</label>
+          <input type="range" id="vol-sfx" min="0" max="100"></div>
+        <div class="setting"><label>螢幕震動　<span id="shake-v">100</span>%</label>
+          <input type="range" id="shake-intensity" min="0" max="100"></div>
+        <div class="setting"><label>粒子品質</label>
+          <select id="particle-quality">
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select></div>
+        <div class="setting"><label>顯示傷害數字</label>
+          <input type="checkbox" id="damage-numbers" checked></div>
+        <div class="setting"><label>色弱友善色板</label>
+          <input type="checkbox" id="colorblind-mode"></div>
+      </div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 操作說明 -->
+    <div id="controls-screen" class="fullscreen hidden">
+      <h1 class="gold">操作說明</h1>
+      <div class="controls-grid">
+        <div><b>WASD</b><br>移動</div>
+        <div><b>滑鼠</b><br>瞄準 / 攻擊</div>
+        <div><b>Space</b><br>衝刺</div>
+        <div><b>E</b><br>採集</div>
+        <div><b>1 / 2 / 3</b><br>切換武器</div>
+        <div><b>B</b><br>建築選單</div>
+        <div><b>T</b><br>技能面板</div>
+        <div><b>N</b><br>商店</div>
+        <div><b>Q</b><br>職業技能 1</div>
+        <div><b>R</b><br>職業技能 2</div>
+        <div><b>V</b><br>職業治癒</div>
+        <div><b>P / Esc</b><br>暫停</div>
+        <div><b>F / L</b><br>存 / 讀檔</div>
+      </div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 製作群 -->
+    <div id="credits-screen" class="fullscreen hidden">
+      <h1 class="gold">製作群</h1>
+      <div class="credits">
+        <p><b>遊戲設計 / 程式</b><br>Survival Outpost Team</p>
+        <p><b>音效</b><br>Web Audio API 即時合成</p>
+        <p><b>美術</b><br>Canvas 幾何圖形 + 漸層</p>
+        <p><b>引擎</b><br>原生 HTML5 / JavaScript / Canvas</p>
+        <p class="small">本作為純前端遊戲，無後端、無外部素材依賴。</p>
+      </div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 存檔槽 -->
+    <div id="save-slots" class="fullscreen hidden">
+      <h1 class="gold">存檔</h1>
+      <div id="save-list"></div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 卡牌選擇 -->
+    <div id="card-screen" class="fullscreen hidden">
+      <h1 class="gold">第 <span id="card-wave">1</span> 波結束　選 1 張</h1>
+      <div id="card-list"></div>
+    </div>
+
+    <!-- 成就 -->
+    <div id="achievements-screen" class="fullscreen hidden">
+      <h1 class="gold">成就 <span id="achievements-count">0/0</span></h1>
+      <div id="achievements-list"></div>
+      <button data-back class="small-btn">返回</button>
+    </div>
+
+    <!-- 建築 / 技能 / 商店 -->
     <div id="build-menu" class="overlay hidden">
       <h2>建築選單　<small>(B 關閉)</small></h2>
       <div id="build-list"></div>
     </div>
-
-    <!-- 技能面板 -->
     <div id="skill-panel" class="overlay hidden">
       <h2>技能　<small>(T 關閉)</small></h2>
       <div class="info">剩餘技能點：<b id="skill-points">0</b></div>
       <div id="skill-list"></div>
     </div>
-
-    <!-- 商店 -->
     <div id="shop-panel" class="overlay hidden wide">
       <h2>荒野商人　<small>(N 關閉)</small></h2>
       <div class="info">所持金幣：<b id="shop-gold">0</b></div>
       <div id="shop-list"></div>
-      <p class="small">提示：商店只在 <b>準備時段</b> 開放交易。</p>
+      <p class="small">準備時段才能交易</p>
     </div>
 
-    <!-- 開始畫面 -->
-    <div id="start-screen" class="fullscreen">
-      <div class="title-glow">
-        <h1>荒野據點</h1>
-        <h2>SURVIVAL OUTPOST</h2>
-      </div>
-      <p>採集、建造、升級技能，守住 15 波，擊敗最終 Boss！</p>
-      <div class="menu-buttons">
-        <button id="btn-start">開始新遊戲</button>
-        <button id="btn-load">讀取存檔</button>
-      </div>
-      <p class="small">提示：F 存檔　L 讀檔　P 暫停</p>
-    </div>
-
-    <!-- 死亡畫面 -->
+    <!-- 死亡 / 勝利 -->
     <div id="dead-screen" class="fullscreen hidden">
       <h1 class="red">你死了</h1>
-      <p>撐到了第 <span id="dead-wave">1</span> 波　擊殺 <span id="dead-kill">0</span> 怪物</p>
-      <p>最終分數：<span id="dead-score">0</span></p>
-      <button id="btn-restart">重新開始</button>
+      <div id="dead-stats" class="stats-block"></div>
+      <div class="menu-buttons">
+        <button id="btn-restart">重新挑戰</button>
+        <button id="btn-dead-menu" class="small-btn">回主選單</button>
+      </div>
     </div>
 
-    <!-- 勝利畫面 -->
     <div id="victory-screen" class="fullscreen hidden">
       <h1 class="gold">勝利！</h1>
-      <p>你成功守住了據點！</p>
-      <p>最終分數：<span id="victory-score">0</span></p>
-      <button id="btn-restart-win">再玩一次</button>
+      <div id="victory-stats" class="stats-block"></div>
+      <div class="menu-buttons">
+        <button id="btn-restart-win">再挑戰</button>
+        <button id="btn-win-menu" class="small-btn">回主選單</button>
+      </div>
     </div>
 
-    <!-- 暫停畫面 -->
+    <!-- 暫停 -->
     <div id="pause-screen" class="overlay hidden">
       <h2>遊戲暫停</h2>
-      <p>按 P 繼續</p>
+      <div class="menu-buttons stacked">
+        <button id="btn-resume">繼續</button>
+        <button id="btn-pause-save" class="small-btn">存檔</button>
+        <button id="btn-pause-settings" class="small-btn">設定</button>
+        <button id="btn-pause-menu" class="small-btn">回主選單</button>
+      </div>
     </div>
 
-    <!-- Toast -->
-    <div id="toast"></div>
+    <!-- 觸控操作層 -->
+    <div id="touch-overlay" class="hidden">
+      <div id="joystick-base"><div id="joystick-knob"></div></div>
+      <div id="touch-attack" class="touch-btn">攻擊</div>
+      <div id="touch-skills">
+        <div id="touch-q" class="touch-skill">Q</div>
+        <div id="touch-r" class="touch-skill">R</div>
+        <div id="touch-v" class="touch-skill">V</div>
+      </div>
+      <div id="touch-extra">
+        <div id="btn-touch-build" class="touch-extra-btn">建</div>
+        <div id="btn-touch-shop" class="touch-extra-btn">店</div>
+      </div>
+    </div>
 
-    <!-- 戰鬥提示（中央通知） -->
+    <div id="toast"></div>
     <div id="big-toast"></div>
   </div>
 
-  <!-- JS 載入順序 -->
+  <!-- Supabase（雲端後端 SDK，必須在 cloud.js 之前載入）-->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- JS 依賴順序 -->
   <script src="js/utils.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/particle.js"></script>
   <script src="js/collision.js"></script>
   <script src="js/input.js"></script>
+  <script src="js/prng.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/charClass.js"></script>
+  <script src="js/card.js"></script>
+  <script src="js/achievement.js"></script>
   <script src="js/save.js"></script>
   <script src="js/weapon.js"></script>
   <script src="js/skill.js"></script>
@@ -186,6 +301,8 @@
   <script src="js/wave.js"></script>
   <script src="js/player.js"></script>
   <script src="js/shop.js"></script>
+  <script src="js/touch.js"></script>
+  <script src="js/cloud.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>

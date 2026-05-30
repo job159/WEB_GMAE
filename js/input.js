@@ -18,7 +18,7 @@ const Input = {
       const k = e.key.toLowerCase();
       if (!this.keys[k]) this.keysPressed[k] = true;
       this.keys[k] = true;
-      if (['w','a','s','d',' ','q','r','g','v','x','c','e','b','t','n','f','l','p','1','2','3'].includes(k)) e.preventDefault();
+      if (['w','a','s','d',' ','q','r','v','e','b','t','n','f','l','p','1','2','3'].includes(k)) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => {
       this.keys[e.key.toLowerCase()] = false;

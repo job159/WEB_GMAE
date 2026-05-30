@@ -50,7 +50,13 @@ class Building {
     if (!this.alive) return;
     if (this.hitFlash > 0) this.hitFlash -= dt;
 
+    // 自癒之牆 mutation
+    if ((this.type === 'wall_wood' || this.type === 'wall_stone') && game.mut?.wallRegen) {
+      if (this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 6 * dt);
+    }
+
     if (this.cfg.attack) {
+      const towerSpeedMult = game.mut?.towerSpeedMult || 1;
       this.attackCooldown -= dt;
       if (this.attackCooldown <= 0) {
         let nearest = null, nd = this.attackRange;
@@ -71,7 +77,7 @@ class Building {
           game.projectiles.push(new Projectile(mx, my, ang, 600, dmg, 'tower', 'arrow'));
           // 塔頂槍口閃光（淡藍）
           game.particles.muzzleFlash(mx, my, ang, '#88ccff');
-          this.attackCooldown = this.attackRate;
+          this.attackCooldown = this.attackRate * towerSpeedMult;
         }
       }
     }

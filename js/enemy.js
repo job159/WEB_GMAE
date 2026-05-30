@@ -43,6 +43,9 @@ class Enemy {
     this.attackCooldown = 0;
     this.attackRate = type === 'troll' ? 1.4 : (type === 'imp' ? 0.6 : 0.9);
     this.slowTimer = 0;
+    this.frozenTimer = 0;
+    this.burnTimer = 0;
+    this.burnDps = 0;
     this.knockTimer = 0;
     this.knockVX = 0; this.knockVY = 0;
     this.target = null;
@@ -59,13 +62,25 @@ class Enemy {
     if (this.hp <= 0) {
       this.alive = false; this.hp = 0;
       const bonus = 1 + Math.min(0.5, (game.combo || 0) * 0.01);
+      const goldMult = (game.mut?.goldMult || 1);
+      const gold = Math.round(this.gold * bonus * goldMult);
       game.player.gainExp(Math.round(this.exp * bonus), game);
-      game.inventory.gold += Math.round(this.gold * bonus);
+      game.inventory.gold += gold;
+      game.stats?.recordGoldEarned(gold);
       game.score += Math.round(20 * bonus);
       game.killCount++;
+      game.stats?.recordKill(this.type);
+      game.stats?.recordCombo(game.combo || 0);
+      // Mutation: 擊殺回血回魔
+      if (game.mut?.healOnKill) {
+        game.player.hp = Math.min(game.player.maxHp, game.player.hp + game.mut.healOnKill);
+      }
+      if (game.mut?.mpOnKill) {
+        game.player.mp = Math.min(game.player.maxMp, game.player.mp + game.mut.mpOnKill);
+      }
       game.particles.blood(this.x, this.y, 12);
       game.particles.spark(this.x, this.y, 6, '#ff6666');
-      game.particles.damageText(this.x, this.y - 16, `+${Math.round(this.gold * bonus)}g`, '#ffd86b');
+      game.particles.damageText(this.x, this.y - 16, `+${gold}g`, '#ffd86b');
       AudioMgr.enemyDie();
     }
   }
@@ -82,6 +97,40 @@ class Enemy {
     this.wobble += dt * 6;
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.slowTimer > 0) this.slowTimer -= dt;
+    if (this.frozenTimer > 0) {
+      this.frozenTimer -= dt;
+      // 凍結期間不行動
+      if (Math.random() < dt * 4) {
+        game.particles.add({
+          x: this.x + Utils.jitter(this.radius),
+          y: this.y + Utils.jitter(this.radius),
+          vx: 0, vy: -10, life: 0.5, max: 0.5,
+          color: '#aaccff', size: 2, type: 'spark'
+        });
+      }
+      return;
+    }
+    if (this.burnTimer > 0) {
+      this.burnTimer -= dt;
+      this.hp -= this.burnDps * dt;
+      if (Math.random() < dt * 12) {
+        game.particles.add({
+          x: this.x + Utils.jitter(this.radius), y: this.y - 4,
+          vx: Utils.jitter(8), vy: -Utils.randomRange(30, 60),
+          life: 0.4, max: 0.4, color: '#ff8030',
+          size: 3, type: 'fire', grow: -6
+        });
+      }
+      if (this.hp <= 0) { this.takeDamage(0.01, game); return; } // 觸發 die
+    }
+    // 冰霜地面減速
+    if (game.iceZones) {
+      for (const z of game.iceZones) {
+        if (Utils.distance(this.x, this.y, z.x, z.y) < z.radius + this.radius) {
+          this.slowTimer = Math.max(this.slowTimer, 0.5);
+        }
+      }
+    }
 
     if (this.knockTimer > 0) {
       this.x += this.knockVX * dt;
@@ -91,6 +140,25 @@ class Enemy {
     }
 
     const player = game.player;
+    // 玩家隱身：無法被偵測，怪物原地停下或攻擊建築
+    if (player.invisTimer > 0) {
+      // 攻擊最近建築
+      let nearestB = null, nd = 300;
+      for (const b of game.buildings) {
+        if (!b.alive || !b.solid) continue;
+        const d = Utils.distance(this.x, this.y, b.x, b.y);
+        if (d < nd) { nd = d; nearestB = b; }
+      }
+      if (nearestB) {
+        const a = Utils.angle(this.x, this.y, nearestB.x, nearestB.y);
+        const sp = this.speed * (this.slowTimer > 0 ? 0.4 : 1) * dt;
+        const nx = this.x + Math.cos(a) * sp;
+        const ny = this.y + Math.sin(a) * sp;
+        const r = Collision.resolveMove(this, nx, ny, game.buildings, game.mapW, game.mapH);
+        this.x = r.x; this.y = r.y;
+      }
+      return;
+    }
     const distToPlayer = Utils.distance(this.x, this.y, player.x, player.y);
 
     let target = player;
@@ -192,9 +260,14 @@ class Enemy {
     ctx.ellipse(s.x, s.y + this.radius * 0.85, this.radius * 0.9, this.radius * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const fill = flash ? '#fff' : this.color;
+    let fill = flash ? '#fff' : this.color;
+    if (this.frozenTimer > 0) fill = '#88ccff';
     ctx.strokeStyle = this.dark;
     ctx.lineWidth = 2;
+    // 凍結光暈
+    if (this.frozenTimer > 0) Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 8, '#aaccff', 0.5);
+    // 燃燒火苗
+    if (this.burnTimer > 0) Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 6, '#ff5020', 0.5);
 
     if (this.type === 'slime') {
       ctx.fillStyle = fill;

@@ -1,0 +1,34 @@
+# 系統檔
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / 編輯器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node（未來如果要用 npm）
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+package-lock.json
+yarn.lock
+
+# 環境變數 / 密鑰（千萬不要推上去）
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# 建置產出
+dist/
+build/
+.cache/
+
+# 日誌 / 暫存
+*.log
+*.tmp

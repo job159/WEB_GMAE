@@ -234,6 +234,82 @@ class ParticleSystem {
     this.spark(x2, y2, 12, '#aaccff');
   }
 
+  // ===== 戰士：弧形劍光 =====
+  slashArc(x, y, angle, range, color = '#ff5050') {
+    this.add({
+      x, y, vx: 0, vy: 0,
+      life: 0.32, max: 0.32, color, size: range,
+      type: 'slashArc', angle, range
+    });
+  }
+
+  // ===== 戰士：地面裂縫 =====
+  groundCrack(x, y, angle, length) {
+    const segments = 7;
+    const points = [{ x, y }];
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      points.push({
+        x: x + Math.cos(angle) * length * t + Utils.jitter(10),
+        y: y + Math.sin(angle) * length * t + Utils.jitter(10)
+      });
+    }
+    this.add({
+      x, y, vx: 0, vy: 0,
+      life: 1.2, max: 1.2, color: '#3a2010', size: 5,
+      type: 'crack', points
+    });
+  }
+
+  // ===== 法師：冰封新星（多顆飛旋冰晶）=====
+  frostNova(x, y, radius) {
+    for (let i = 0; i < 28; i++) {
+      const ang = (i / 28) * Math.PI * 2;
+      const speed = radius / 0.55;
+      this.add({
+        x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+        life: 0.55, max: 0.55, color: '#aaccff',
+        size: Utils.randomRange(5, 8), type: 'iceShard', angle: ang
+      });
+    }
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      this.add({
+        x: x + Math.cos(ang) * 20, y: y + Math.sin(ang) * 20,
+        vx: 0, vy: 0,
+        life: 0.7, max: 0.7, color: '#fff',
+        size: 14, type: 'iceShard', angle: ang
+      });
+    }
+  }
+
+  // ===== 法師：生命之泉符文圈（地面）=====
+  runeCircle(x, y, radius, duration = 3) {
+    this.add({
+      x, y, vx: 0, vy: 0,
+      life: duration, max: duration, color: '#6fdd6f',
+      size: radius, type: 'runeCircle'
+    });
+  }
+
+  // ===== 弓手：獵人之擁葉子旋轉 =====
+  leafSwirl(x, y) {
+    for (let i = 0; i < 20; i++) {
+      const ang = (i / 20) * Math.PI * 2;
+      const r = 30 + Math.random() * 12;
+      this.add({
+        x: x + Math.cos(ang) * r,
+        y: y + Math.sin(ang) * r,
+        vx: -Math.sin(ang) * 100,
+        vy: Math.cos(ang) * 100 - 50,
+        life: 1.5, max: 1.5,
+        color: Utils.pick(['#5cdb5c', '#aaffaa', '#3aa83a']),
+        size: Utils.randomRange(3, 5),
+        type: 'leaf', rot: ang
+      });
+    }
+  }
+
   heal(x, y, count = 18) {
     for (let i = 0; i < count; i++) {
       this.add({
@@ -307,26 +383,139 @@ class ParticleSystem {
       ctx.globalAlpha = alpha;
 
       if (p.type === 'bolt') {
-        // 鋸齒閃電線
         ctx.save();
         ctx.shadowColor = p.color;
         ctx.shadowBlur = 16;
-        // 外層粗光
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 6 * alpha;
         ctx.beginPath();
         for (let i = 0; i < p.points.length; i++) {
           const pt = p.points[i];
           const ps = Utils.worldToScreen(pt.x, pt.y, camera);
-          if (i === 0) ctx.moveTo(ps.x, ps.y);
-          else ctx.lineTo(ps.x, ps.y);
+          if (i === 0) ctx.moveTo(ps.x, ps.y); else ctx.lineTo(ps.x, ps.y);
         }
         ctx.stroke();
-        // 內層白核心
         ctx.shadowBlur = 0;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2 * alpha;
         ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+
+      // ===== 地面裂縫 =====
+      if (p.type === 'crack') {
+        ctx.save();
+        ctx.strokeStyle = '#0a0500';
+        ctx.lineWidth = 6 * alpha;
+        ctx.shadowColor = '#ff6020';
+        ctx.shadowBlur = 14 * alpha;
+        ctx.beginPath();
+        for (let i = 0; i < p.points.length; i++) {
+          const pt = p.points[i];
+          const ps = Utils.worldToScreen(pt.x, pt.y, camera);
+          if (i === 0) ctx.moveTo(ps.x, ps.y); else ctx.lineTo(ps.x, ps.y);
+        }
+        ctx.stroke();
+        // 內亮光（橘紅）
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(255,140,40,${alpha})`;
+        ctx.lineWidth = 2 * alpha;
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+
+      // ===== 弧形劍光 =====
+      if (p.type === 'slashArc') {
+        const screen = Utils.worldToScreen(p.x, p.y, camera);
+        const arcLen = 1.0 * alpha + 0.4;
+        ctx.save();
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(p.angle - arcLen / 2);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 14 * alpha;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.range, 0, arcLen);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 6 * alpha;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.range, 0, arcLen);
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+
+      // ===== 冰晶 =====
+      if (p.type === 'iceShard') {
+        const screen = Utils.worldToScreen(p.x, p.y, camera);
+        ctx.save();
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(p.angle + (1 - alpha) * 5);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const r = i % 2 === 0 ? p.size : p.size * 0.5;
+          const x = Math.cos(a) * r;
+          const y = Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.globalAlpha = alpha;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        continue;
+      }
+
+      // ===== 符文圈（地面）=====
+      if (p.type === 'runeCircle') {
+        const screen = Utils.worldToScreen(p.x, p.y, camera);
+        const rot = (p.max - p.life) * 1.2;
+        ctx.save();
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(rot);
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 14;
+        // 三層同心圓
+        ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, p.size * 0.7, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, p.size * 0.35, 0, Math.PI * 2); ctx.stroke();
+        // 8 個符文記號
+        ctx.fillStyle = p.color;
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4;
+          const x = Math.cos(a) * p.size * 0.85;
+          const y = Math.sin(a) * p.size * 0.85;
+          ctx.beginPath();
+          ctx.moveTo(x - 5, y);
+          ctx.lineTo(x, y - 5);
+          ctx.lineTo(x + 5, y);
+          ctx.lineTo(x, y + 5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        // 內部光暈
+        const gd = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+        gd.addColorStop(0, 'rgba(111,221,111,0.5)');
+        gd.addColorStop(1, 'rgba(111,221,111,0)');
+        ctx.fillStyle = gd;
+        ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
         ctx.restore();
         continue;
       }

@@ -14,6 +14,8 @@ class Projectile {
     this.damage = damage;
     this.owner = owner;
     this.kind = kind;
+    this.pierce = extra.pierce || 0; // 子彈穿透：剩餘穿透次數
+    this.hitSet = new Set();         // 已命中過的敵人，避免重複
     this.radius =
       kind === 'fireball' ? 10 :
       kind === 'magic'    ? 8  :
@@ -155,11 +157,19 @@ class Projectile {
       }
     } else {
       for (const e of game.enemies) {
-        if (!e.alive) continue;
+        if (!e.alive || this.hitSet.has(e)) continue;
         if (Collision.circleCircle(this, e)) {
           e.takeDamage(this.damage, game);
+          this.hitSet.add(e);
           game.particles.damageText(e.x, e.y - 10, this.damage, '#fff066');
           AudioMgr.arrowHit();
+          // 穿透：若還有 pierce 次數，子彈繼續飛
+          if (this.pierce > 0) {
+            this.pierce--;
+            game.particles.spark(this.x, this.y, 4, this.color);
+            // 不結束、不爆炸
+            continue;
+          }
           this.alive = false;
           if (this.aoe > 0) this.detonate(game);
           else game.particles.bulletImpact(this.x, this.y, this.color);

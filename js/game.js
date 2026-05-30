@@ -1,6 +1,6 @@
 /* ================================================================
  * game.js
- * 遊戲主體：狀態 / 主迴圈 / 更新 / 繪製 / 鏡頭 / 震動 / 商店
+ * 主迴圈 / 卡牌觸發 / 鏡頭 / 震動 / 商店 / mutations
  * ================================================================ */
 class Game {
   constructor(canvas) {
@@ -15,6 +15,10 @@ class Game {
     this.player = new Player(this.mapW / 2, this.mapH / 2);
     this.skills = new SkillSystem();
     this.skills.applyAll(this.player);
+    this.stats = new Stats();
+    this.mut = {};         // mutations (cards apply here)
+    this.seed = null;
+    this.rng = null;
 
     this.enemies = [];
     this.projectiles = [];
@@ -35,6 +39,8 @@ class Game {
     this.uiBuildOpen = false;
     this.uiSkillOpen = false;
     this.uiShopOpen = false;
+    this.uiCardOpen = false;
+    this.pendingCards = null;
 
     this.quests = this.buildInitialQuests();
     this.killCount = 0;
@@ -42,18 +48,23 @@ class Game {
     this.combo = 0;
     this.comboTimer = 0;
 
-    this.particles = new ParticleSystem(800);
-
-    // 地圖裝飾（草、花），純視覺
-    this.decor = this.generateDecor();
-
+    this.particles = new ParticleSystem(900);
+    this.decor = [];
     this.spawnInitialResources();
+    this.generateDecor();
 
     this.shakeIntensity = 0;
     this.shakeTime = 0;
 
+    this.scheduled = []; // 技能延遲事件
+    this.healZones = []; // 法師生命之泉
+    this.iceZones = [];  // 冰霜地面
+
     this.lastTime = performance.now();
+    this.autoSaveTimer = 30;
   }
+
+  schedule(delay, fn) { this.scheduled.push({ delay, fn }); }
 
   buildInitialQuests() {
     return [
@@ -67,84 +78,102 @@ class Game {
   }
 
   generateDecor() {
-    const list = [];
-    for (let i = 0; i < 220; i++) {
-      list.push({
-        x: Utils.randomRange(0, this.mapW),
-        y: Utils.randomRange(0, this.mapH),
-        type: Utils.chance(0.75) ? 'grass' : 'flower',
-        size: Utils.randomRange(2, 4),
-        hue: Utils.randomInt(0, 360)
+    this.decor = [];
+    const r = this.rng || { next: Math.random, int: (a,b) => Math.floor(Math.random()*(b-a+1))+a, chance: p => Math.random() < p };
+    for (let i = 0; i < 280; i++) {
+      this.decor.push({
+        x: r.next() * this.mapW,
+        y: r.next() * this.mapH,
+        type: r.chance(0.7) ? 'grass' : (r.chance(0.6) ? 'flower' : 'stone'),
+        size: 2 + r.next() * 3,
+        hue: r.int(0, 360)
       });
     }
-    return list;
   }
 
   spawnInitialResources() {
     this.resources = [];
+    const r = this.rng || { next: Math.random, range: (a,b) => Math.random()*(b-a)+a };
     const ratios = { tree: 100, rock: 60, iron: 30, bush: 40, chest: 10 };
     for (const [type, count] of Object.entries(ratios)) {
       for (let i = 0; i < count; i++) {
         for (let tries = 0; tries < 20; tries++) {
-          const x = Utils.randomRange(80, this.mapW - 80);
-          const y = Utils.randomRange(80, this.mapH - 80);
+          const x = r.range(80, this.mapW - 80);
+          const y = r.range(80, this.mapH - 80);
           if (Utils.distance(x, y, this.player.x, this.player.y) < 100) continue;
           let ok = true;
-          for (const r of this.resources) {
-            if (Utils.distance(x, y, r.x, r.y) < r.radius + 20) { ok = false; break; }
+          for (const rs of this.resources) {
+            if (Utils.distance(x, y, rs.x, rs.y) < rs.radius + 20) { ok = false; break; }
           }
-          if (ok) {
-            this.resources.push(new ResourceNode(type, x, y));
-            break;
-          }
+          if (ok) { this.resources.push(new ResourceNode(type, x, y)); break; }
         }
       }
     }
   }
 
-  reset() {
-    const shop = this.player ? this.player.shopUpgrades : { maxHp: 0, maxMp: 0, attack: 0, defense: 0 };
+  // 用 classId 與 mode 開始新局
+  startNewRun(classId = 'warrior', mode = 'normal', seed = null) {
+    if (mode === 'daily') {
+      const t = PRNG.todaySeed();
+      seed = t.seed;
+    } else if (mode === 'ngplus') {
+      // NG+ 隨機 seed
+      seed = Math.floor(Math.random() * 1e9);
+    } else if (seed === null) {
+      seed = Math.floor(Math.random() * 1e9);
+    }
+    this.seed = seed;
+    this.rng = PRNG.rng(seed);
+
     this.player = new Player(this.mapW / 2, this.mapH / 2);
-    this.player.shopUpgrades = shop;  // 永久強化跨局保留
-    this.player.applyShopUpgrades();
+    this.player.applyClass(classId);
     this.skills = new SkillSystem();
     this.skills.applyAll(this.player);
-    this.enemies = [];
-    this.projectiles = [];
-    this.buildings = [];
-    this.boss = null;
-    this.inventory = { wood: 0, stone: 0, iron: 0, gold: 0, food: 0 };
+    this.stats = new Stats();
+    this.stats.classId = classId;
+    this.stats.mode = mode;
+    this.mut = {};
+    this.enemies = []; this.projectiles = []; this.buildings = []; this.boss = null;
+    this.inventory = { wood: 10, stone: 0, iron: 0, gold: 50, food: 0 };
     this.waveManager = new WaveManager();
-    this.timeOfDay = 0;
-    this.day = 1;
-    this.isNight = false;
-    this.killCount = 0;
-    this.score = 0;
-    this.combo = 0;
+    this.timeOfDay = 0; this.day = 1; this.isNight = false;
+    this.killCount = 0; this.score = 0; this.combo = 0;
+    this.scheduled = []; this.healZones = []; this.iceZones = [];
     this.particles.clear();
     this.quests = this.buildInitialQuests();
     this.spawnInitialResources();
-    UI.showDead(false);
-    UI.showVictory(false);
-    UI.showStart(false);
-    UI.hideShop();
-    UI.hideBuildMenu();
-    UI.hideSkillPanel();
-    this.uiBuildOpen = this.uiSkillOpen = this.uiShopOpen = false;
-    this.placingBuild = false;
-    this.selectedBuild = null;
+    this.generateDecor();
+    this.placingBuild = false; this.selectedBuild = null;
+    this.uiBuildOpen = this.uiSkillOpen = this.uiShopOpen = this.uiCardOpen = false;
+    UI.hideAllOverlays();
     this.state = 'playing';
+    Utils.bigToast(CHAR_CLASSES[classId].name + ' 出發！');
   }
 
-  start() {
-    this.state = 'playing';
-    UI.showStart(false);
-  }
   pause() { if (this.state !== 'playing') return; this.state = 'paused'; UI.showPause(true); }
   resume() { if (this.state !== 'paused') return; this.state = 'playing'; UI.showPause(false); }
   togglePause() { this.state === 'playing' ? this.pause() : this.resume(); }
-  win()  { this.state = 'victory'; UI.showVictory(true, this.score); AudioMgr.victory(); this.markQuestDone('final'); }
-  die()  { this.state = 'dead'; UI.showDead(true, this.waveManager.current, this.killCount, this.score); AudioMgr.defeat(); }
+
+  win() {
+    this.state = 'victory';
+    this.stats.victory = true;
+    Meta.recordRun(this);
+    const newAch = Meta.check(this);
+    UI.showVictory(true, this);
+    AudioMgr.victory();
+    if (newAch.length) Utils.bigToast(`解鎖 ${newAch.length} 個成就`);
+    this.markQuestDone('final');
+    // 雲端上傳分數
+    if (typeof Cloud !== 'undefined' && Cloud.submitScore) Cloud.submitScore(this);
+  }
+  die() {
+    this.state = 'dead';
+    Meta.recordRun(this);
+    const newAch = Meta.check(this);
+    UI.showDead(true, this);
+    AudioMgr.defeat();
+    if (newAch.length) Utils.bigToast(`解鎖 ${newAch.length} 個成就`);
+  }
 
   shake(intensity = 5, duration = 0.2) {
     if (intensity > this.shakeIntensity) {
@@ -153,13 +182,24 @@ class Game {
     }
   }
 
+  // 卡牌系統
+  openCardChoice() {
+    this.pendingCards = Cards.draw(this, this.rng);
+    this.uiCardOpen = true;
+    UI.showCardChoice(this);
+  }
+  pickCard(card) {
+    Cards.take(card, this);
+    this.uiCardOpen = false;
+    UI.hideCardChoice();
+    this.pendingCards = null;
+    this.waveManager.afterCardChoice(this);
+  }
+
   markQuestDone(id) {
     const q = this.quests.find(x => x.id === id);
-    if (q && !q.done) {
-      q.done = true; q.progress = q.target;
-      Utils.toast(`任務完成：${q.text}`);
-      this.score += 50;
-    }
+    if (q && !q.done) { q.done = true; q.progress = q.target;
+      Utils.toast(`任務完成：${q.text}`); this.score += 50; }
   }
   updateQuests() {
     const qw = this.quests.find(q => q.id === 'wood');
@@ -188,18 +228,15 @@ class Game {
     const dtRaw = (now - this.lastTime) / 1000;
     this.lastTime = now;
     const dt = Math.min(dtRaw, 0.05);
-
+    if (typeof Touch !== 'undefined' && Touch.enabled) Touch.feedInput();
     Input.updateMouseWorld(this.camera);
-
     if (this.state === 'playing') this.update(dt);
     this.render();
-
     Input.endFrame();
     requestAnimationFrame((t) => this.loop(t));
   }
 
   update(dt) {
-    // 連擊計時
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.combo = 0;
@@ -208,31 +245,52 @@ class Game {
     this.player.update(dt, this);
     if (this.player.hp <= 0) { this.die(); return; }
 
-    if (Input.wasPressed('1')) { this.player.currentWeapon = 'axe'; AudioMgr.click(); }
-    if (Input.wasPressed('2')) { this.player.currentWeapon = 'sword'; AudioMgr.click(); }
-    if (Input.wasPressed('3')) { this.player.currentWeapon = 'bow'; AudioMgr.click(); }
+    // 切武器（必須在 unlockedWeapons 內）
+    if (Input.wasPressed('1') && this.player.unlockedWeapons.includes('axe'))  { this.player.currentWeapon = 'axe'; AudioMgr.click(); }
+    if (Input.wasPressed('2') && this.player.unlockedWeapons.includes('sword')){ this.player.currentWeapon = 'sword'; AudioMgr.click(); }
+    if (Input.wasPressed('3') && this.player.unlockedWeapons.includes('bow'))  { this.player.currentWeapon = 'bow'; AudioMgr.click(); }
 
     if (Input.wasPressed('b')) {
-      this.uiBuildOpen = !this.uiBuildOpen;
-      AudioMgr.click();
-      if (this.uiBuildOpen) { UI.showBuildMenu(this); }
+      this.uiBuildOpen = !this.uiBuildOpen; AudioMgr.click();
+      if (this.uiBuildOpen) UI.showBuildMenu(this);
       else { UI.hideBuildMenu(); this.placingBuild = false; this.selectedBuild = null; }
     }
     if (Input.wasPressed('t')) {
-      this.uiSkillOpen = !this.uiSkillOpen;
-      AudioMgr.click();
+      this.uiSkillOpen = !this.uiSkillOpen; AudioMgr.click();
       this.uiSkillOpen ? UI.showSkillPanel(this) : UI.hideSkillPanel();
     }
     if (Input.wasPressed('n')) {
-      this.uiShopOpen = !this.uiShopOpen;
-      AudioMgr.click();
+      this.uiShopOpen = !this.uiShopOpen; AudioMgr.click();
       this.uiShopOpen ? UI.showShop(this) : UI.hideShop();
     }
-    if (Input.wasPressed('f')) Save.save(this);
-    if (Input.wasPressed('l')) Save.load(this);
+    if (Input.wasPressed('f')) Save.save(this, 1);
+    if (Input.wasPressed('l')) Save.load(this, 1);
 
-    if (this.placingBuild && this.selectedBuild && Input.mouse.pressed) {
-      this.tryPlaceBuilding();
+    if (this.placingBuild && this.selectedBuild && Input.mouse.pressed) this.tryPlaceBuilding();
+
+    // 排程觸發
+    for (let i = this.scheduled.length - 1; i >= 0; i--) {
+      this.scheduled[i].delay -= dt;
+      if (this.scheduled[i].delay <= 0) {
+        try { this.scheduled[i].fn(); } catch (e) { console.error(e); }
+        this.scheduled.splice(i, 1);
+      }
+    }
+    // 治癒地面
+    for (let i = this.healZones.length - 1; i >= 0; i--) {
+      const z = this.healZones[i];
+      z.life -= dt;
+      if (z.life <= 0) { this.healZones.splice(i, 1); continue; }
+      if (Utils.distance(z.x, z.y, this.player.x, this.player.y) < z.radius + this.player.radius) {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + 10 * dt);
+        this.player.mp = Math.min(this.player.maxMp, this.player.mp + 5 * dt);
+      }
+    }
+    // 冰霜地面
+    for (let i = this.iceZones.length - 1; i >= 0; i--) {
+      const z = this.iceZones[i];
+      z.life -= dt;
+      if (z.life <= 0) { this.iceZones.splice(i, 1); continue; }
     }
 
     for (const e of this.enemies) e.update(dt, this);
@@ -240,16 +298,12 @@ class Game {
     for (const p of this.projectiles) p.update(dt, this);
     for (const b of this.buildings) b.update(dt, this);
     for (const r of this.resources) r.update(dt, this);
-
     this.particles.update(dt);
 
     this.enemies = this.enemies.filter(e => e.alive);
     this.projectiles = this.projectiles.filter(p => p.alive);
     this.buildings = this.buildings.filter(b => b.alive);
-    if (this.boss && !this.boss.alive) {
-      if (this.waveManager.current === 15) this.markQuestDone('final');
-      this.boss = null;
-    }
+    if (this.boss && !this.boss.alive) this.boss = null;
 
     this.waveManager.update(dt, this);
 
@@ -269,6 +323,13 @@ class Game {
       if (this.shakeTime <= 0) this.shakeIntensity = 0;
     }
 
+    // 30 秒自動存檔
+    this.autoSaveTimer -= dt;
+    if (this.autoSaveTimer <= 0) {
+      Save.autosave(this);
+      this.autoSaveTimer = 30;
+    }
+
     UI.update(this);
   }
 
@@ -282,14 +343,11 @@ class Game {
     const grid = 20;
     const mx = Math.round(Input.mouse.worldX / grid) * grid;
     const my = Math.round(Input.mouse.worldY / grid) * grid;
-    if (Utils.distance(mx, my, this.player.x, this.player.y) > 240) {
-      Utils.toast('太遠了'); AudioMgr.deny(); return;
-    }
-    if (!Collision.canPlaceBuilding(mx, my, cfg.w, cfg.h, this)) {
-      Utils.toast('這裡放不下'); AudioMgr.deny(); return;
-    }
+    if (Utils.distance(mx, my, this.player.x, this.player.y) > 240) { Utils.toast('太遠了'); AudioMgr.deny(); return; }
+    if (!Collision.canPlaceBuilding(mx, my, cfg.w, cfg.h, this)) { Utils.toast('放不下'); AudioMgr.deny(); return; }
     for (const [k, v] of Object.entries(cfg.cost)) this.inventory[k] -= v;
     this.buildings.push(new Building(type, mx, my));
+    this.stats?.recordBuild(type);
     this.particles.shockRing(mx, my, 40, '#ffd86b');
     this.particles.smoke(mx, my, 8);
     AudioMgr.build();
@@ -301,7 +359,6 @@ class Game {
     const ch = this.canvas.height;
     this.camera.tx = Utils.clamp(this.player.x - cw / 2, 0, this.mapW - cw);
     this.camera.ty = Utils.clamp(this.player.y - ch / 2, 0, this.mapH - ch);
-    // 平滑追隨
     const lerpFactor = 1 - Math.pow(0.001, dt);
     this.camera.x = Utils.lerp(this.camera.x, this.camera.tx, lerpFactor);
     this.camera.y = Utils.lerp(this.camera.y, this.camera.ty, lerpFactor);
@@ -311,58 +368,59 @@ class Game {
     const ctx = this.ctx;
     const cw = this.canvas.width;
     const ch = this.canvas.height;
-
     ctx.save();
-
-    // 螢幕震動
     if (this.shakeIntensity > 0) {
       const t = this.shakeTime > 0 ? (this.shakeTime / 0.3) : 0;
       const k = this.shakeIntensity * Utils.clamp(t, 0, 1);
       ctx.translate(Utils.jitter(k), Utils.jitter(k));
     }
 
-    // 背景
-    ctx.fillStyle = '#2b3a1f';
+    // 背景漸層 + 紋路
+    const bg = ctx.createLinearGradient(0, 0, 0, ch);
+    bg.addColorStop(0, '#3a4d22');
+    bg.addColorStop(1, '#1c2810');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, cw, ch);
 
     this.drawGrid(ctx);
     this.drawDecor(ctx);
 
     for (const r of this.resources) r.draw(ctx, this.camera);
+    // 冰霜地面（在建築下）
+    for (const z of this.iceZones) {
+      const ps = Utils.worldToScreen(z.x, z.y, this.camera);
+      const a = Math.min(1, z.life / 1.5);
+      ctx.fillStyle = `rgba(170,204,255,${0.25 * a})`;
+      ctx.beginPath(); ctx.arc(ps.x, ps.y, z.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(200,230,255,${0.5 * a})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ps.x, ps.y, z.radius, 0, Math.PI * 2); ctx.stroke();
+    }
     for (const b of this.buildings) b.draw(ctx, this.camera);
     for (const e of this.enemies) e.draw(ctx, this.camera);
     if (this.boss) this.boss.draw(ctx, this.camera);
     this.player.draw(ctx, this.camera);
     for (const p of this.projectiles) p.draw(ctx, this.camera);
-
-    // 粒子（在物件上方，但傷害飄字最後）
     this.particles.draw(ctx, this.camera);
 
     if (this.placingBuild && this.selectedBuild) this.drawBuildPreview(ctx);
-
     if (this.isNight) this.drawNightOverlay(ctx);
 
-    // 傷害飄字 / Boss 條 一定要在最上面
     this.particles.drawTexts(ctx, this.camera);
     if (this.boss && this.boss.spawnAnim <= 0) this.boss.drawHpBarUI(ctx, cw);
-
     this.drawMapBorder(ctx);
-
-    // 時間漸層遮罩（黃昏 / 清晨）
     this.drawTimeTint(ctx, cw, ch);
 
     ctx.restore();
   }
 
   drawTimeTint(ctx, cw, ch) {
-    // 用 timeOfDay 做藍紫黃漸變
     const t = this.timeOfDay;
     let r = 0, g = 0, b = 0, a = 0;
-    if (t < 0.05) { r = 80; g = 40; b = 120; a = 0.18; }       // 凌晨
-    else if (t < 0.10) { r = 255; g = 160; b = 80; a = 0.10; } // 日出
-    else if (t < 0.50) { a = 0; }                              // 白天
-    else if (t < 0.55) { r = 255; g = 120; b = 60; a = 0.15; } // 黃昏
-    else { /* 夜晚由 drawNightOverlay 處理 */ }
+    if (t < 0.05) { r = 80; g = 40; b = 120; a = 0.18; }
+    else if (t < 0.10) { r = 255; g = 160; b = 80; a = 0.10; }
+    else if (t < 0.50) { a = 0; }
+    else if (t < 0.55) { r = 255; g = 120; b = 60; a = 0.15; }
     if (a > 0) {
       ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
       ctx.fillRect(0, 0, cw, ch);
@@ -386,13 +444,11 @@ class Game {
 
   drawDecor(ctx) {
     const c = this.camera;
-    const cw = this.canvas.width;
-    const ch = this.canvas.height;
+    const cw = this.canvas.width, ch = this.canvas.height;
     for (const d of this.decor) {
       if (d.x < c.x - 20 || d.x > c.x + cw + 20) continue;
       if (d.y < c.y - 20 || d.y > c.y + ch + 20) continue;
-      const sx = d.x - c.x;
-      const sy = d.y - c.y;
+      const sx = d.x - c.x, sy = d.y - c.y;
       if (d.type === 'grass') {
         ctx.strokeStyle = 'rgba(80,140,60,0.7)';
         ctx.lineWidth = 1;
@@ -400,11 +456,12 @@ class Game {
         ctx.moveTo(sx, sy); ctx.lineTo(sx - 2, sy - d.size * 2);
         ctx.moveTo(sx, sy); ctx.lineTo(sx + 2, sy - d.size * 2);
         ctx.stroke();
-      } else {
+      } else if (d.type === 'flower') {
         ctx.fillStyle = `hsl(${d.hue},70%,60%)`;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI * 2); ctx.fill();
+      } else if (d.type === 'stone') {
+        ctx.fillStyle = 'rgba(110,110,110,0.5)';
+        ctx.beginPath(); ctx.arc(sx, sy, d.size, 0, Math.PI * 2); ctx.fill();
       }
     }
   }
@@ -431,19 +488,15 @@ class Game {
     ctx.strokeStyle = ok ? '#fff' : '#ff0';
     ctx.lineWidth = 2;
     ctx.strokeRect(s.x - cfg.w / 2, s.y - cfg.h / 2, cfg.w, cfg.h);
-    // 範圍指引（建造距離）
     const ps = Utils.worldToScreen(this.player.x, this.player.y, this.camera);
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.beginPath(); ctx.arc(ps.x, ps.y, 240, 0, Math.PI * 2); ctx.stroke();
   }
 
   drawNightOverlay(ctx) {
-    const cw = this.canvas.width;
-    const ch = this.canvas.height;
-
+    const cw = this.canvas.width, ch = this.canvas.height;
     ctx.fillStyle = 'rgba(0, 10, 40, 0.62)';
     ctx.fillRect(0, 0, cw, ch);
-
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
     const ps = Utils.worldToScreen(this.player.x, this.player.y, this.camera);
@@ -452,7 +505,6 @@ class Game {
     grad0.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad0;
     ctx.beginPath(); ctx.arc(ps.x, ps.y, 110, 0, Math.PI * 2); ctx.fill();
-
     for (const b of this.buildings) {
       if (!b.alive || b.type !== 'campfire') continue;
       const s = Utils.worldToScreen(b.x, b.y, this.camera);

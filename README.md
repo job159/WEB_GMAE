@@ -1,111 +1,138 @@
 # 荒野據點 Survival Outpost
 
-純前端 (HTML + CSS + JavaScript + Canvas) 製作的 2D 俯視角生存遊戲，可直接部署到 GitHub Pages。
-**無後端、無外部素材、無外部套件、無音檔**（所有音效由 Web Audio 即時合成）。
+純前端 + Supabase BaaS 的 2D 俯視角生存遊戲。
 
-## 玩法
+- 🎮 3 種職業 × 3 個獨家技能
+- 🎴 Roguelike 卡牌系統（含技能升級）
+- 🐉 3 種誇張造型 Boss
+- ☁ 雲端存檔 + 排行榜 + 成就同步
+- 👤 匿名 / Discord / Google 三種登入
+- 📱 觸控操作 + PWA
 
-- 收集 **木 / 石 / 鐵 / 食物**
-- 建造 **木牆、石牆、箭塔、篝火、工作台、陷阱**
-- 升級 9 種被動技能 + 使用 4 種爆炸華麗的主動技能
-- 在 **荒野商人** 處購買藥水、材料包、永久強化
-- 撐過 15 波怪物，擊敗最終 Boss「荒野巨獸」
+線上版：https://job159.github.io/WEB_GMAE/
 
-## 操作
+---
 
-| 按鍵 | 功能 |
-|------|------|
-| W / A / S / D | 移動 |
-| 滑鼠左鍵 | 攻擊 / 放置建築 |
-| E | 採集附近資源 |
+## ⚠ 第一次部署：Supabase 必做的 4 件事
+
+雲端功能依賴 Supabase。請在 Dashboard 完成以下 4 步驟，否則登入會失敗：
+
+### Step 1：在 SQL Editor 跑這段建表 + RLS
+
+```sql
+create table profiles (
+  id uuid primary key references auth.users on delete cascade,
+  display_name text not null,
+  created_at timestamptz default now()
+);
+create table saves (
+  user_id uuid not null references auth.users on delete cascade,
+  slot smallint not null check (slot >= 0 and slot <= 3),
+  data jsonb not null,
+  wave int, level int, class_id text, score int, mode text,
+  updated_at timestamptz default now(),
+  primary key (user_id, slot)
+);
+create table scores (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  display_name text not null,
+  score int not null check (score >= 0 and score < 10000000),
+  wave int not null check (wave between 1 and 15),
+  class_id text not null,
+  mode text not null check (mode in ('normal','daily','ngplus')),
+  daily_seed text,
+  duration_sec int,
+  created_at timestamptz default now()
+);
+create index scores_score_idx on scores (score desc);
+create index scores_daily_idx on scores (daily_seed, score desc);
+create table achievements (
+  user_id uuid not null references auth.users on delete cascade,
+  achievement_id text not null,
+  unlocked_at timestamptz default now(),
+  primary key (user_id, achievement_id)
+);
+
+alter table profiles enable row level security;
+alter table saves enable row level security;
+alter table scores enable row level security;
+alter table achievements enable row level security;
+
+create policy "read all profiles" on profiles for select using (true);
+create policy "upsert own profile" on profiles for insert with check (auth.uid() = id);
+create policy "update own profile" on profiles for update using (auth.uid() = id);
+create policy "all own saves" on saves for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "read all scores" on scores for select using (true);
+create policy "insert own scores" on scores for insert with check (auth.uid() = user_id);
+create policy "read own achievements" on achievements for select using (auth.uid() = user_id);
+create policy "insert own achievements" on achievements for insert with check (auth.uid() = user_id);
+```
+
+### Step 2：啟用 Anonymous Sign-Ins
+
+**Authentication → Sign In / Providers → Anonymous Sign-Ins → Enable**
+
+### Step 3：設定 Site URL & Redirect URLs（OAuth 必需）
+
+**Authentication → URL Configuration**
+
+- **Site URL**：`https://job159.github.io/WEB_GMAE/`
+- **Redirect URLs**（按 Add URL 加 4 條）：
+  ```
+  https://job159.github.io/WEB_GMAE/**
+  http://localhost:5500/**
+  http://127.0.0.1:5500/**
+  http://localhost:5173/**
+  ```
+  雙星號 `**` 是萬用字元。漏這步會出現「Redirect URL not allowed」。
+
+### Step 4：啟用 Discord / Google OAuth
+
+#### Discord
+1. https://discord.com/developers/applications → New Application
+2. **OAuth2 → Redirects → Add**：`https://ifdpokqieznddirqxubq.supabase.co/auth/v1/callback`
+3. **OAuth2 → Reset Secret** 取得 Client Secret
+4. 回 Supabase **Authentication → Providers → Discord → Enable**，貼 Client ID + Secret
+
+#### Google
+1. https://console.cloud.google.com → 新專案
+2. **APIs & Services → OAuth consent screen → Configure**（External）
+3. **Credentials → Create OAuth Client ID → Web application**
+4. Authorized redirect URI：`https://ifdpokqieznddirqxubq.supabase.co/auth/v1/callback`
+5. 取得 Client ID/Secret 貼進 Supabase **Authentication → Providers → Google**
+
+---
+
+## 玩法操作
+
+| 鍵 | 功能 |
+|----|------|
+| WASD | 移動 |
+| 滑鼠左鍵 | 攻擊 |
 | Space | 衝刺 |
-| 1 / 2 / 3 | 切換 斧頭 / 鐵劍 / 弓箭 |
-| **Q** | 🔥 火球術（爆炸 AOE） |
-| **R** | ⚡ 雷霆風暴（多重閃電） |
-| **G** | 💥 衝擊波（環狀擊退） |
-| **V** | 💚 治癒術（補 HP / 體力 / 飢餓） |
+| E | 採集 |
+| 1 / 2 / 3 | 切換武器 |
+| Q / R / V | 職業專屬 3 技能 |
 | B | 建築選單 |
-| T | 技能面板（升被動） |
-| N | 商店（準備時段才能交易） |
-| P | 暫停 |
-| F | 存檔 / L 讀檔 |
+| T | 被動技能面板 |
+| N | 商店（準備時段） |
+| P | 暫停 / Esc 關閉面板 |
+| F / L | 存 / 讀檔 |
 
-## 怪物
+## 雲端機制（重點）
 
-- 史萊姆、野狼、哥布林、骷髏弓手、巨魔
-- **小惡魔**（極速纏鬥）、**毒蜘蛛**（中毒 DoT）、**黑暗法師**（魔法球 AOE）
-- 每 5 波出 Boss **荒野巨獸**
-  - 召喚小怪 / 地震 AOE / 衝鋒 / 狂暴模式
+- 啟動時**自動匿名登入**，立即可用雲端
+- 存檔同時寫 localStorage + Supabase（背景，失敗不影響）
+- 讀檔優先雲端，斷網時退回本地
+- 通關自動上傳分數到排行榜
+- 解成就自動同步雲端
+- 登入 Discord / Google 後跨裝置同步
 
-## 商店
-
-- 治療 / 魔力 / 體力藥水、乾糧
-- 木 / 石 / 鐵 材料包
-- 技能點 +1
-- **永久強化**（每次購買漲價 50%）：最大 HP、最大 MP、攻擊、防禦
-
-## 視覺亮點
-
-- 粒子系統（火、煙、葉、血、火花、爆炸、震波環、傷害飄字）
-- 螢幕震動 + 鏡頭平滑追隨
-- 日夜系統（凌晨紫光、日出橘光、夜晚變暗、篝火光圈）
-- 武器特效（扇形光）、衝刺殘影、發光投射物
-
-## 在本機執行
-
-VS Code 安裝 **Live Server** → 在 `index.html` 上右鍵 → Open with Live Server。
-或直接雙擊 `index.html` 用瀏覽器開啟。
-
-## 部署到 GitHub Pages
+## 部署
 
 ```bash
-cd survival-outpost
-git init
-git add .
-git commit -m "init"
-git branch -M main
-git remote add origin https://github.com/<YOUR_USER>/survival-outpost.git
-git push -u origin main
-```
-GitHub repo → **Settings → Pages** → Source: `Deploy from a branch`，Branch: `main` / `(root)`。
-1~2 分鐘後在 `https://<YOUR_USER>.github.io/survival-outpost/` 上線。
-
-## 專案架構
-
-```
-survival-outpost/
-├── index.html
-├── README.md
-├── css/style.css
-├── js/
-│   ├── main.js          入口
-│   ├── game.js          主迴圈 / 鏡頭 / 震動 / 商店整合
-│   ├── player.js        玩家、主動技能呼叫、中毒、永久強化
-│   ├── enemy.js         8 種小怪
-│   ├── boss.js          Boss：召喚、地震、衝鋒、狂暴
-│   ├── resource.js      樹/石/鐵/草/寶箱
-│   ├── building.js      6 種建築（含發光、紋路、攻擊範圍光暈）
-│   ├── weapon.js        武器表
-│   ├── skill.js         9 被動 + 4 主動技能
-│   ├── projectile.js    箭 / 火球 / 魔法球（含尾巴粒子）
-│   ├── wave.js          波數 + 新怪物開放
-│   ├── save.js          存讀檔（含永久強化）
-│   ├── shop.js          商店物品 + 邏輯
-│   ├── ui.js            HUD / 任務 / 冷卻 / 商店畫面
-│   ├── input.js         鍵盤滑鼠 + 自動初始化音效
-│   ├── collision.js     碰撞
-│   ├── particle.js      粒子系統 + 傷害飄字
-│   ├── audio.js         Web Audio 合成音效
-│   └── utils.js         數學 / 文字 / 發光 / Toast
-└── assets/README.md
+git add . && git commit -m "cloud" && git push
 ```
 
-## 平衡
-
-- HP / MP / 體力 / 飢餓：100（可永久升）
-- 速度：200 px/s（衝刺 560）
-- 第一波 5 隻，每波 +3 隻，怪物強度 +12% / 波
-- 每 5 波出 Boss（35% HP 以下狂暴）
-- 第 15 波擊敗 Boss → 勝利
-
-Have fun!
+GitHub Pages 約 1 分鐘後更新。

@@ -5,9 +5,32 @@
  * ================================================================ */
 const AudioMgr = {
   ctx: null,
-  master: 0.4,
+  master: 0.8,
+  sfx: 0.7,
+  bgm: 0.6,
   muted: false,
   enabled: false,
+
+  effectiveSfx() { return this.muted ? 0 : this.master * this.sfx; },
+  saveSettings() {
+    try {
+      localStorage.setItem('audio-settings-v1', JSON.stringify({
+        master: this.master, sfx: this.sfx, bgm: this.bgm, muted: this.muted
+      }));
+    } catch (e) {}
+  },
+  loadSettings() {
+    try {
+      const raw = localStorage.getItem('audio-settings-v1');
+      if (raw) {
+        const o = JSON.parse(raw);
+        if (o.master != null) this.master = o.master;
+        if (o.sfx != null) this.sfx = o.sfx;
+        if (o.bgm != null) this.bgm = o.bgm;
+        if (o.muted != null) this.muted = o.muted;
+      }
+    } catch (e) {}
+  },
 
   init() {
     if (this.ctx) return;
@@ -31,7 +54,7 @@ const AudioMgr = {
     osc.frequency.setValueAtTime(freq, t0);
     if (sweepTo != null) osc.frequency.exponentialRampToValueAtTime(Math.max(1, sweepTo), t0 + dur);
 
-    const v = vol * this.master;
+    const v = vol * this.effectiveSfx();
     gain.gain.setValueAtTime(0.0001, t0);
     gain.gain.exponentialRampToValueAtTime(v, t0 + attack);
     gain.gain.exponentialRampToValueAtTime(v * sustain, t0 + attack + decay);
@@ -58,7 +81,7 @@ const AudioMgr = {
     flt.frequency.value = filterFreq;
     flt.Q.value = filterQ;
     const gain = this.ctx.createGain();
-    const v = vol * this.master;
+    const v = vol * this.effectiveSfx();
     gain.gain.setValueAtTime(v, t0);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
