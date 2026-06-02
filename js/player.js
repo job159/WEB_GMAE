@@ -420,27 +420,59 @@ class Player {
       const melee = (this.classMods.meleeMult || 1);
       const dmg = (w.damage + this.attack) * melee * buff * invisBoost;
 
-      // ===== 巨砍刀衝擊波（揮砍自帶效果）=====
+      // ===== 巨砍刀衝擊波(揮砍自帶效果)=====
       if (w.shockwave) {
-        // 雙層巨大劍光
+        // 三層巨大劍光(疊出深紅 + 黑 + 白邊)
+        game.particles.slashArc(this.x, this.y, this.facing, w.range + 24, '#fff');
         game.particles.slashArc(this.x, this.y, this.facing, w.range + 14, '#cc3030');
         game.particles.slashArc(this.x, this.y, this.facing, w.range, '#1a0a1a');
-        // 前方擴張震波環
+        // 中央血色爆閃 + 前方雙環
+        game.particles.add({
+          x: this.x + Math.cos(this.facing) * 20,
+          y: this.y + Math.sin(this.facing) * 20,
+          vx: 0, vy: 0,
+          life: 0.32, max: 0.32, color: 'rgba(255,40,40,0.55)',
+          size: 130, type: 'flash'
+        });
         game.particles.add({
           x: this.x + Math.cos(this.facing) * 35,
           y: this.y + Math.sin(this.facing) * 35,
           vx: 0, vy: 0,
-          life: 0.45, max: 0.45, color: '#cc3030',
+          life: 0.5, max: 0.5, color: '#cc3030',
+          size: 20, type: 'ring', targetRadius: 140
+        });
+        game.particles.add({
+          x: this.x + Math.cos(this.facing) * 35,
+          y: this.y + Math.sin(this.facing) * 35,
+          vx: 0, vy: 0,
+          life: 0.4, max: 0.4, color: '#fff',
           size: 20, type: 'ring', targetRadius: 90
         });
-        // 火花
-        game.particles.spark(
-          this.x + Math.cos(this.facing) * 50,
-          this.y + Math.sin(this.facing) * 50,
-          14, '#ff5050'
-        );
-        game.shake(4, 0.15);
+        // 血色火花環(前方扇形)
+        for (let i = 0; i < 14; i++) {
+          const a = this.facing + Utils.jitter(0.45);
+          const sp = Utils.randomRange(160, 360);
+          game.particles.add({
+            x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 0.5, max: 0.5,
+            color: Utils.pick(['#cc3030', '#ff5050', '#5a0a0a', '#fff']),
+            size: Utils.randomRange(3, 6), type: 'fire', grow: -5
+          });
+        }
+        // 血滴向前濺射
+        for (let i = 0; i < 10; i++) {
+          const a = this.facing + Utils.jitter(0.4);
+          const sp = Utils.randomRange(120, 280);
+          game.particles.add({
+            x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30,
+            life: 0.7, max: 0.7,
+            color: Utils.pick(['#cc3030', '#5a0a0a', '#aa0000']),
+            size: Utils.randomRange(3, 5), type: 'blood', gravity: 200
+          });
+        }
+        game.shake(9, 0.28);   // 從 4 提升到 9
         AudioMgr.shockwave();
+        AudioMgr.swing();
       }
 
       // ===== doomCleaver：每次揮砍噴月牙（被動）=====
@@ -482,6 +514,9 @@ class Player {
       }
 
       let hitAny = false;
+      // 狂戰士普攻吸血:每命中一隻回 4 HP(bloodCleaver 額外 +6)
+      const berserkerLifesteal = this.classId === 'berserker' ? 4 : 0;
+      let totalHits = 0;
       for (const e of game.enemies) {
         if (!e.alive) continue;
         const d = Utils.distance(this.x, this.y, e.x, e.y);
@@ -489,11 +524,20 @@ class Player {
         const ang = Utils.angle(this.x, this.y, e.x, e.y);
         if (Math.abs(Utils.angleDiff(ang, this.facing)) < w.arc / 2) {
           e.takeDamage(dmg, game);
-          e.applyKnockback(this.x, this.y, 180);
-          game.particles.spark(e.x, e.y, 6, '#ffd86b');
+          e.applyKnockback(this.x, this.y, 220);
+          game.particles.spark(e.x, e.y, 8, this.classId === 'berserker' ? '#ff3030' : '#ffd86b');
+          // 狂戰士命中爆閃 + 血濺
+          if (this.classId === 'berserker') {
+            game.particles.add({
+              x: e.x, y: e.y, vx: 0, vy: 0,
+              life: 0.18, max: 0.18, color: '#fff', size: 30, type: 'flash'
+            });
+            game.particles.blood(e.x, e.y, 6);
+          }
           game.particles.damageText(e.x, e.y - 10, dmg, '#fff');
           AudioMgr.hit();
           hitAny = true;
+          totalHits++;
           // bloodCleaver: 擊中回血
           if (w.healOnHit) {
             this.hp = Math.min(this.maxHp, this.hp + w.healOnHit);
@@ -501,6 +545,10 @@ class Player {
               x: this.x, y: this.y - 10, vx: 0, vy: -40,
               life: 0.5, max: 0.5, color: '#ff5050', size: 4, type: 'fire', grow: -3
             });
+          }
+          // 狂戰士普攻吸血
+          if (berserkerLifesteal) {
+            this.hp = Math.min(this.maxHp, this.hp + berserkerLifesteal);
           }
         }
       }
@@ -512,11 +560,27 @@ class Player {
         if (Math.abs(Utils.angleDiff(ang, this.facing)) < w.arc / 2) {
           __boss.takeDamage(dmg, game);
           game.particles.damageText(__boss.x, __boss.y - 10, dmg, '#fff', true);
+          if (this.classId === 'berserker') {
+            game.particles.add({
+              x: __boss.x, y: __boss.y, vx: 0, vy: 0,
+              life: 0.2, max: 0.2, color: '#fff', size: 40, type: 'flash'
+            });
+            this.hp = Math.min(this.maxHp, this.hp + berserkerLifesteal * 2);
+          }
           AudioMgr.hit();
           hitAny = true;
+          totalHits++;
         }
       }
-      if (hitAny) game.shake(2, 0.08);
+      // 吸血回血浮字
+      if (berserkerLifesteal && totalHits > 0) {
+        game.particles.damageText(this.x, this.y - 28, '+' + (totalHits * berserkerLifesteal), '#ff5050');
+      }
+      // 狂戰士命中震屏(原本只有 2)
+      if (hitAny) {
+        if (this.classId === 'berserker') game.shake(7 + Math.min(6, totalHits), 0.22);
+        else game.shake(2, 0.08);
+      }
     }
   }
 
@@ -574,7 +638,7 @@ class Player {
     while (this.exp >= this.expNeed) {
       this.exp -= this.expNeed;
       this.level++;
-      // 每 2 級才 +1 技能點（之前太多）
+      // 每 2 級才 +1 技能點(之前太多)
       if (this.level % 2 === 0) this.skillPoints++;
       this.maxHp += 5;
       this.hp = this.maxHp;
@@ -583,6 +647,69 @@ class Player {
       Utils.bigToast(`LV UP　${this.level}`);
       AudioMgr.levelup();
       game.particles.levelup(this.x, this.y);
+      // 等級到達自動解鎖傳說武器
+      this.checkAutoUnlock(game);
+    }
+  }
+
+  // 根據目前等級自動解鎖傳說武器(可重複呼叫,只解鎖一次)
+  checkAutoUnlock(game) {
+    const tiers = LEGENDARY_WEAPONS[this.classId] || [];
+    for (const w of tiers) {
+      if (!w.unlockLv) continue;
+      if (this.level < w.unlockLv) continue;
+      if (this.unlockedWeapons.includes(w.id)) continue;
+      this.unlockedWeapons.push(w.id);
+      // 自動裝備新武器
+      this.currentWeapon = w.id;
+      if (game) {
+        Utils.bigToast(`解鎖傳說武器:${w.name}!`);
+        AudioMgr.victory();
+        AudioMgr.bossSpawn();
+        // 全屏金色爆閃 + 多層震波
+        game.particles.add({
+          x: this.x, y: this.y, vx: 0, vy: 0,
+          life: 0.8, max: 0.8,
+          color: 'rgba(255,216,107,0.75)', size: 500, type: 'flash'
+        });
+        game.particles.add({
+          x: this.x, y: this.y, vx: 0, vy: 0,
+          life: 0.7, max: 0.7,
+          color: '#fff', size: 300, type: 'flash'
+        });
+        for (let i = 0; i < 5; i++) {
+          game.schedule(i * 0.08, () => {
+            game.particles.shockRing(this.x, this.y, 200 + i * 80, i % 2 === 0 ? '#ffd86b' : '#ff8030');
+          });
+        }
+        // 螺旋粒子
+        for (let i = 0; i < 60; i++) {
+          const t = i / 60;
+          const a = t * Math.PI * 8;
+          const r = 30 + t * 200;
+          game.particles.add({
+            x: this.x + Math.cos(a) * r, y: this.y + Math.sin(a) * r,
+            vx: Math.cos(a) * 60, vy: Math.sin(a) * 60 - 30,
+            life: 1.5, max: 1.5,
+            color: Utils.pick(['#ffd86b', '#ff8030', '#fff']),
+            size: Utils.randomRange(4, 8), type: 'fire', grow: -3
+          });
+        }
+        // 上升光柱
+        for (let i = 0; i < 20; i++) {
+          game.particles.add({
+            x: this.x + Utils.jitter(50), y: this.y + Utils.jitter(20),
+            vx: Utils.jitter(20), vy: -Utils.randomRange(140, 300),
+            life: 1.8, max: 1.8, color: Utils.pick(['#ffd86b', '#fff']),
+            size: Utils.randomRange(8, 14), type: 'smoke', grow: 6
+          });
+        }
+        game.shake(20, 0.7);
+        // UI 刷新
+        if (typeof UI !== 'undefined' && UI.refreshWeaponSlots) {
+          UI.refreshWeaponSlots(this.classId);
+        }
+      }
     }
   }
 

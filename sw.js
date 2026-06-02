@@ -1,5 +1,5 @@
 /* Service Worker — 離線快取(network-first,確保新版自動上線) */
-const CACHE = 'survival-outpost-v7';
+const CACHE = 'survival-outpost-v8';
 const FILES = [
   './',
   './index.html',

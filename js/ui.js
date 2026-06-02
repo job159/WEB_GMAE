@@ -237,15 +237,16 @@ const UI = {
     }
   },
 
-  // ===== 鍛造選單（取代建造）=====
+  // ===== 武器圖鑑(原鍛造選單,改成等級自動解鎖)=====
   showForgeMenu(game) {
     this.el.buildMenu.classList.remove('hidden');
-    // 把標題改成鍛造
+    // 把標題改成武器圖鑑
     const h2 = this.el.buildMenu.querySelector('h2');
-    if (h2) h2.innerHTML = '鍛造傳說武器　<small>(B 關閉)</small>';
+    if (h2) h2.innerHTML = '傳說武器圖鑑　<small>(B 關閉 - 升級自動解鎖)</small>';
     const list = this.el.buildList;
     list.innerHTML = '';
     const tiers = LEGENDARY_WEAPONS[game.player.classId] || [];
+    const playerLv = game.player.level;
     for (let i = 0; i < tiers.length; i++) {
       const w = tiers[i];
       const wcfg = WEAPONS[w.id] || {};
@@ -255,29 +256,22 @@ const UI = {
       div.className = 'build-item';
       if (equipped) div.classList.add('selected');
 
-      let costStr = '';
-      let canAfford = true;
-      if (w.cost) {
-        const parts = [];
-        for (const [k, v] of Object.entries(w.cost)) {
-          const have = game.inventory[k] || 0;
-          if (have < v) canAfford = false;
-          parts.push(`<span class="${have >= v ? '' : 'lock'}">${k} ${v}</span>`);
-        }
-        costStr = parts.join('  ');
-      } else {
-        costStr = '<span style="color:#888">初始裝備</span>';
-      }
+      const unlockLv = w.unlockLv || 1;
+      const lvStr = unlockLv > 1
+        ? (owned
+          ? `<span style="color:#6fdd6f">LV${unlockLv} 已解鎖</span>`
+          : `<span style="color:#888">LV${unlockLv} 解鎖(目前 LV${playerLv})</span>`)
+        : '<span style="color:#888">初始裝備</span>';
 
       const stateLabel =
         equipped ? '<span style="color:#ffd86b">★ 已裝備</span>' :
-        owned    ? '<span style="color:#6fdd6f">✓ 已鍛造（點擊裝備）</span>' :
-                   '<span style="color:#aaa">尚未鍛造</span>';
+        owned    ? '<span style="color:#6fdd6f">✓ 點擊裝備</span>' :
+                   '<span style="color:#aaa">尚未解鎖</span>';
 
       div.innerHTML = `
         <b>[Tier ${i + 1}] ${w.name}</b>　傷害 ${wcfg.damage || '?'}　${stateLabel}
         <div class="cost">${w.desc}</div>
-        <div class="cost">材料：${costStr}</div>`;
+        <div class="cost">${lvStr}</div>`;
       div.onclick = () => {
         if (owned) {
           if (!equipped) {
@@ -287,21 +281,10 @@ const UI = {
             AudioMgr.click();
             this.showForgeMenu(game);
           }
-          return;
+        } else {
+          Utils.toast(`需要 LV${unlockLv} 才能解鎖`);
+          AudioMgr.deny();
         }
-        // 鍛造
-        if (!w.cost) return;
-        if (!canAfford) { Utils.toast('材料不足'); AudioMgr.deny(); return; }
-        for (const [k, v] of Object.entries(w.cost)) game.inventory[k] -= v;
-        game.player.unlockedWeapons.push(w.id);
-        game.player.currentWeapon = w.id;
-        AudioMgr.levelup();
-        Utils.bigToast(`鍛造完成：${w.name}！`);
-        // 鍛造粒子
-        game.particles.shockRing(game.player.x, game.player.y, 100, '#ffd86b');
-        game.particles.spark(game.player.x, game.player.y, 30, '#ffd86b');
-        UI.refreshWeaponSlots(game.player.classId);
-        this.showForgeMenu(game);
       };
       list.appendChild(div);
     }

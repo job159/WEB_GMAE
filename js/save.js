@@ -161,6 +161,8 @@ const Save = {
     Object.assign(game.player, data.player);
     if (data.player.classId) game.player.classId = data.player.classId;
     game.player.unlockedWeapons = data.player.unlockedWeapons || ['axe', 'sword', 'bow'];
+    // 讀檔後檢查等級對應的傳說武器是否需要自動解鎖
+    if (game.player.checkAutoUnlock) game.player.checkAutoUnlock(null);
 
     game.inventory = { wood: 0, stone: 0, iron: 0, gold: 0, food: 0, ...data.inventory };
     for (const s of game.skills.list) {

@@ -52,30 +52,30 @@ const CHAR_CLASSES = {
 
 const CLASS_LIST = ['mage', 'archer', 'berserker'];
 
-/* ===== 傳說武器：每職業 3 階（初始 / 中階鍛造 / 高階鍛造）===== */
+/* ===== 傳說武器：每職業 3 階（初始 / 中階 LV5 / 高階 LV10 自動解鎖）===== */
 const LEGENDARY_WEAPONS = {
   mage: [
     { id: 'meteorStaff',  name: '隕石杖',   desc: '初始武器：魔粒子',
-      cost: null },
+      cost: null, unlockLv: 1 },
     { id: 'skyburnStaff', name: '焚天杖',   desc: '焰魔粒子帶範圍爆炸 + 技能 +40%',
-      cost: { wood: 30, stone: 20, gold: 350 } },
+      cost: { wood: 30, stone: 20, gold: 350 }, unlockLv: 5 },
     { id: 'genesisStaff', name: '創世神杖', desc: '虛空黑洞魔粒子 + 技能 +80%、CD -25%',
-      cost: { stone: 50, iron: 35, gold: 900 } }
+      cost: { stone: 50, iron: 35, gold: 900 }, unlockLv: 10 }
   ],
   archer: [
     { id: 'giantbow',  name: '巨弓',     desc: '初始武器：大型金箭',
-      cost: null },
+      cost: null, unlockLv: 1 },
     { id: 'stormBow',  name: '風暴弓',   desc: '每次射出 3 道箭、傷害 +50%',
-      cost: { wood: 40, iron: 15, gold: 350 } },
+      cost: { wood: 40, iron: 15, gold: 350 }, unlockLv: 5 },
     { id: 'frostBow',  name: '永凍弓',   desc: '所有箭自動凍結、傷害 +100%',
-      cost: { wood: 50, iron: 35, gold: 900 } }
+      cost: { wood: 50, iron: 35, gold: 900 }, unlockLv: 10 }
   ],
   berserker: [
     { id: 'cleaver',      name: '巨砍刀',     desc: '初始武器：揮砍衝擊波',
-      cost: null },
+      cost: null, unlockLv: 1 },
     { id: 'bloodCleaver', name: '血飲砍刀',   desc: '擊中回血 +6、傷害 +50%',
-      cost: { stone: 30, iron: 20, gold: 400 } },
+      cost: { stone: 30, iron: 20, gold: 400 }, unlockLv: 5 },
     { id: 'doomCleaver',  name: '末日砍刀',   desc: '每揮砍噴月牙、傷害 +100%',
-      cost: { stone: 60, iron: 40, gold: 1000 } }
+      cost: { stone: 60, iron: 40, gold: 1000 }, unlockLv: 10 }
   ]
 };

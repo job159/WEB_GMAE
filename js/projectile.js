@@ -326,35 +326,79 @@ class Projectile {
             }
             game.shake(this.kind === 'eldritchVoid' ? 9 : 5, 0.25);
           }
-          // 爆裂連矢 buff:命中產生大範圍爆炸
+          // 爆裂連矢 buff:命中產生大範圍爆炸(超誇張版)
           if (this.boomOnHit > 0) {
             const br = this.boomOnHit;
-            // 黑紅爆炸視覺
+            // 黑紅核心爆閃 → 三層大爆閃
             game.particles.add({
               x: this.x, y: this.y, vx: 0, vy: 0,
-              life: 0.4, max: 0.4, color: 'rgba(255,80,30,0.7)',
-              size: br * 1.4, type: 'flash'
+              life: 0.55, max: 0.55, color: 'rgba(255,255,255,0.85)',
+              size: br * 1.0, type: 'flash'
             });
-            game.particles.explosion(this.x, this.y, br);
-            game.particles.shockRing(this.x, this.y, br * 1.2, '#ff5020');
-            game.particles.shockRing(this.x, this.y, br * 0.8, '#ffd86b');
-            // 額外火花環
-            for (let k = 0; k < 16; k++) {
-              const a = (k / 16) * Math.PI * 2;
-              const sp = Utils.randomRange(180, 380);
+            game.particles.add({
+              x: this.x, y: this.y, vx: 0, vy: 0,
+              life: 0.5, max: 0.5, color: 'rgba(255,80,30,0.85)',
+              size: br * 1.6, type: 'flash'
+            });
+            game.particles.add({
+              x: this.x, y: this.y, vx: 0, vy: 0,
+              life: 0.55, max: 0.55, color: 'rgba(20,5,0,0.6)',
+              size: br * 2.2, type: 'flash'
+            });
+            // 雙層爆炸
+            game.particles.explosion(this.x, this.y, br * 1.2);
+            game.particles.explosion(this.x + Utils.jitter(20), this.y + Utils.jitter(20), br * 0.8);
+            // 五層擴張震波
+            game.particles.shockRing(this.x, this.y, br * 1.8, '#000');
+            game.particles.shockRing(this.x, this.y, br * 1.4, '#ff5020');
+            game.particles.shockRing(this.x, this.y, br * 1.0, '#ffaa30');
+            game.particles.shockRing(this.x, this.y, br * 0.7, '#ffd86b');
+            game.particles.shockRing(this.x, this.y, br * 0.4, '#fff');
+            // 32 顆火花環 + 12 顆飛石
+            for (let k = 0; k < 32; k++) {
+              const a = (k / 32) * Math.PI * 2;
+              const sp = Utils.randomRange(220, 520);
               game.particles.add({
                 x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-                life: 0.5, max: 0.5, color: Utils.pick(['#ffd86b', '#ff8030', '#fff']),
-                size: 4, type: 'fire', grow: -5
+                life: 0.7, max: 0.7,
+                color: Utils.pick(['#ffd86b', '#ff8030', '#ff5020', '#fff', '#5a0a0a']),
+                size: Utils.randomRange(4, 9), type: 'fire', grow: -5
               });
             }
-            game.shake(6, 0.22);
+            for (let k = 0; k < 12; k++) {
+              const a = Math.random() * Math.PI * 2;
+              const sp = Utils.randomRange(140, 320);
+              game.particles.add({
+                x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
+                life: 0.9, max: 0.9, color: '#5a3010',
+                size: Utils.randomRange(4, 7), type: 'chip', gravity: 380
+              });
+            }
+            // 黑色濃煙柱
+            for (let k = 0; k < 14; k++) {
+              game.particles.add({
+                x: this.x + Utils.jitter(30), y: this.y + Utils.jitter(15),
+                vx: Utils.jitter(40), vy: -Utils.randomRange(80, 180),
+                life: 1.6, max: 1.6, color: 'rgba(30,15,5,0.8)',
+                size: Utils.randomRange(10, 16), type: 'smoke', grow: 10
+              });
+            }
+            // 撞擊坑
+            game.particles.add({
+              x: this.x, y: this.y, vx: 0, vy: 0,
+              life: 1.8, max: 1.8, color: 'rgba(20,5,5,0.55)',
+              size: br * 0.55, type: 'smoke', grow: -6
+            });
+            // 大震屏 + 雙音效
+            game.shake(14, 0.4);
             AudioMgr.explosion();
+            AudioMgr.shockwave();
             const aoeDmg = this.damage * 0.7;
             for (const e2 of game.enemies) {
               if (!e2.alive) continue;
               if (Utils.distance(this.x, this.y, e2.x, e2.y) < br + e2.radius) {
                 e2.takeDamage(aoeDmg, game);
+                e2.applyKnockback(this.x, this.y, 300);
                 game.particles.damageText(e2.x, e2.y - 10, aoeDmg, '#ffaa33');
               }
             }
