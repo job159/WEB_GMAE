@@ -65,9 +65,12 @@ class Building {
           const d = Utils.distance(this.x, this.y, e.x, e.y);
           if (d < nd) { nearest = e; nd = d; }
         }
-        if (!nearest && game.boss && game.boss.alive) {
-          const d = Utils.distance(this.x, this.y, game.boss.x, game.boss.y);
-          if (d < this.attackRange) nearest = game.boss;
+        if (!nearest) {
+          for (const __boss of game.bosses) {
+            if (!__boss || !__boss.alive) continue;
+            const d = Utils.distance(this.x, this.y, __boss.x, __boss.y);
+            if (d < this.attackRange) { nearest = __boss; break; }
+          }
         }
         if (nearest) {
           const ang = Utils.angle(this.x, this.y, nearest.x, nearest.y);

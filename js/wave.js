@@ -7,8 +7,8 @@ class WaveManager {
     this.current = 1;
     this.maxWave = 15;
     this.state = 'prepare';
-    this.timer = 12;
-    this.prepareTime = 12;
+    this.timer = 10;
+    this.prepareTime = 10;
     this.spawnQueue = [];
     this.spawnInterval = 0.45;
     this.spawnTimer = 0;
@@ -119,41 +119,56 @@ class WaveManager {
       }
     }
     if (this.isBossWave(this.current) && !this.bossSpawned && this.spawnQueue.length === 0) {
-      const pos = this.randomSpawnPoint(game, 280);
-      const bossType = BOSS_BY_WAVE[this.current];
-      game.boss = new Boss(bossType, pos.x, pos.y, this.current);
-      this.bossSpawned = true;
-      Utils.bigToast(`${game.boss.name} 出現！`);
-      AudioMgr.bossSpawn();
-      // 震屏 + 多層紅黑爆閃
-      game.shake(22, 0.9);
-      game.particles.add({
-        x: pos.x, y: pos.y, vx: 0, vy: 0,
-        life: 0.7, max: 0.7, color: 'rgba(0,0,0,0.65)',
-        size: 600, type: 'flash'
+      const types = BOSS_BY_WAVE[this.current];
+      const list = Array.isArray(types) ? types : [types];
+      list.forEach((bossType, idx) => {
+        // 分散出生點
+        const pos = this.randomSpawnPoint(game, 280 + idx * 60);
+        const boss = new Boss(bossType, pos.x, pos.y, this.current);
+        game.addBoss(boss);
+        // 進場震撼:多隻時延遲依序出場更壓迫
+        const delay = idx * 0.5;
+        const trigger = () => {
+          AudioMgr.bossSpawn();
+          game.shake(22, 0.9);
+          game.particles.add({
+            x: pos.x, y: pos.y, vx: 0, vy: 0,
+            life: 0.7, max: 0.7, color: 'rgba(0,0,0,0.65)',
+            size: 600, type: 'flash'
+          });
+          game.particles.shockRing(pos.x, pos.y, 460, '#ff2030');
+          game.particles.shockRing(pos.x, pos.y, 340, '#ff7050');
+          game.particles.shockRing(pos.x, pos.y, 220, '#ffd86b');
+          game.particles.shockRing(pos.x, pos.y, 120, '#fff');
+          for (let i = 0; i < 56; i++) {
+            const a = (i / 56) * Math.PI * 2;
+            const sp = Utils.randomRange(240, 520);
+            game.particles.add({
+              x: pos.x, y: pos.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+              life: 1.2, max: 1.2, color: Utils.pick(['#ff2030', '#ff7050', '#ffd86b', '#fff']),
+              size: Utils.randomRange(5, 10), type: 'fire', grow: -5
+            });
+          }
+          game.particles.smoke(pos.x, pos.y, 40, 'rgba(20,5,10,0.85)');
+        };
+        if (delay > 0) game.schedule(delay, trigger);
+        else trigger();
       });
-      game.particles.shockRing(pos.x, pos.y, 460, '#ff2030');
-      game.particles.shockRing(pos.x, pos.y, 340, '#ff7050');
-      game.particles.shockRing(pos.x, pos.y, 220, '#ffd86b');
-      game.particles.shockRing(pos.x, pos.y, 120, '#fff');
-      // 血爆四射
-      for (let i = 0; i < 56; i++) {
-        const a = (i / 56) * Math.PI * 2;
-        const sp = Utils.randomRange(240, 520);
-        game.particles.add({
-          x: pos.x, y: pos.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-          life: 1.2, max: 1.2, color: Utils.pick(['#ff2030', '#ff7050', '#ffd86b', '#fff']),
-          size: Utils.randomRange(5, 10), type: 'fire', grow: -5
-        });
+      this.bossSpawned = true;
+      const namesUniq = [...new Set(list.map(t =>
+        t === 'beast' ? '荒野巨獸' : t === 'mage' ? '暗影法師' : '機械守護者'))];
+      if (list.length >= 3) {
+        Utils.bigToast(`三王降臨!${namesUniq.join('、')}!`);
+      } else if (list.length >= 2) {
+        Utils.bigToast(`雙王來襲!${namesUniq.join(' + ')}!`);
+      } else {
+        Utils.bigToast(`${namesUniq[0]} 出現!`);
       }
-      // 黑色從天降下塵土
-      game.particles.smoke(pos.x, pos.y, 40, 'rgba(20,5,10,0.85)');
-      // 玩家所在位置也加震屏
       game.particles.spark(game.player.x, game.player.y, 24, '#ff8050');
     }
     const enemiesAlive = game.enemies.some(e => e.alive);
-    const bossAlive = game.boss && game.boss.alive;
-    if (this.spawnQueue.length === 0 && !enemiesAlive && !bossAlive) {
+    const bossAlive = game.bosses.some(b => b && b.alive);
+    if (this.spawnQueue.length === 0 && !enemiesAlive && !bossAlive && (!this.isBossWave(this.current) || this.bossSpawned)) {
       this.finishWave(game);
     }
   }

@@ -164,7 +164,7 @@ const UI = {
                                      (wm.isBossWave(wm.current) ? ` (Boss)` : '');
       this.el.nextWave.style.color = '#ffaa33';
     } else {
-      const alive = game.enemies.filter(e => e.alive).length + (game.boss && game.boss.alive ? 1 : 0);
+      const alive = game.enemies.filter(e => e.alive).length + game.bosses.filter(b => b && b.alive).length;
       this.el.nextWave.textContent = `戰鬥中 ─ 剩餘 ${alive + wm.spawnQueue.length}`;
       this.el.nextWave.style.color = '#ff8080';
     }

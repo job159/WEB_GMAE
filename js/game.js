@@ -24,7 +24,7 @@ class Game {
     this.projectiles = [];
     this.resources = [];
     this.buildings = [];
-    this.boss = null;
+    this.bosses = [];
 
     this.inventory = { wood: 0, stone: 0, iron: 0, gold: 0, food: 0 };
     this.waveManager = new WaveManager();
@@ -66,6 +66,18 @@ class Game {
   }
 
   schedule(delay, fn) { this.scheduled.push({ delay, fn }); }
+
+  // 第一隻仍活著的 Boss(對舊代碼相容);多 Boss 時依序攻擊
+  get boss() {
+    for (const b of this.bosses) if (b && b.alive) return b;
+    return null;
+  }
+  set boss(b) {
+    if (!b) { this.bosses = []; return; }
+    this.bosses = [b];
+  }
+  addBoss(b) { this.bosses.push(b); }
+  bossesAlive() { return this.bosses.filter(b => b && b.alive); }
 
   buildInitialQuests() {
     return [
@@ -138,7 +150,7 @@ class Game {
     this.stats.classId = classId;
     this.stats.mode = mode;
     this.mut = {};
-    this.enemies = []; this.projectiles = []; this.buildings = []; this.boss = null;
+    this.enemies = []; this.projectiles = []; this.buildings = []; this.bosses = [];
     this.inventory = { wood: 10, stone: 0, iron: 0, gold: 50, food: 0 };
     this.waveManager = new WaveManager();
     this.timeOfDay = 0; this.day = 1; this.isNight = false;
@@ -331,7 +343,7 @@ class Game {
     }
 
     for (const e of this.enemies) e.update(dt, this);
-    if (this.boss) this.boss.update(dt, this);
+    for (const b of this.bosses) if (b.alive) b.update(dt, this);
     for (const p of this.projectiles) p.update(dt, this);
     for (const b of this.buildings) b.update(dt, this);
     for (const r of this.resources) r.update(dt, this);
@@ -340,7 +352,7 @@ class Game {
     this.enemies = this.enemies.filter(e => e.alive);
     this.projectiles = this.projectiles.filter(p => p.alive);
     this.buildings = this.buildings.filter(b => b.alive);
-    if (this.boss && !this.boss.alive) this.boss = null;
+    this.bosses = this.bosses.filter(b => b && b.alive);
 
     this.waveManager.update(dt, this);
 
@@ -435,7 +447,7 @@ class Game {
     }
     for (const b of this.buildings) b.draw(ctx, this.camera);
     for (const e of this.enemies) e.draw(ctx, this.camera);
-    if (this.boss) this.boss.draw(ctx, this.camera);
+    for (const b of this.bosses) if (b.alive) b.draw(ctx, this.camera);
     this.player.draw(ctx, this.camera);
     // Combo 光環:combo >= 8 後,玩家身上有金色光圈跟著心跳擴張
     if (this.combo >= 8) {
@@ -471,7 +483,12 @@ class Game {
     if (this.isNight) this.drawNightOverlay(ctx);
 
     this.particles.drawTexts(ctx, this.camera);
-    if (this.boss && this.boss.spawnAnim <= 0) this.boss.drawHpBarUI(ctx, cw);
+    {
+      let idx = 0;
+      for (const b of this.bosses) {
+        if (b && b.alive && b.spawnAnim <= 0) b.drawHpBarUI(ctx, cw, idx++);
+      }
+    }
     this.drawMapBorder(ctx);
     this.drawTimeTint(ctx, cw, ch);
 

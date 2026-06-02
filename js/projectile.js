@@ -87,11 +87,12 @@ class Projectile {
             game.particles.damageText(e.x, e.y - 12, dmg, '#ffaa33');
           }
         }
-        if (game.boss && game.boss.alive) {
-          const d = Utils.distance(this.x, this.y, game.boss.x, game.boss.y);
-          if (d < this.aoe + game.boss.radius) {
-            game.boss.takeDamage(this.damage, game);
-            game.particles.damageText(game.boss.x, game.boss.y - 12, this.damage, '#ffaa33', true);
+        for (const __boss of game.bosses) {
+          if (!__boss || !__boss.alive) continue;
+          const d = Utils.distance(this.x, this.y, __boss.x, __boss.y);
+          if (d < this.aoe + __boss.radius) {
+            __boss.takeDamage(this.damage, game);
+            game.particles.damageText(__boss.x, __boss.y - 12, this.damage, '#ffaa33', true);
           }
         }
       }
@@ -296,9 +297,11 @@ class Projectile {
                 this.hitSet.add(e2);
               }
             }
-            if (game.boss && game.boss.alive &&
-                Utils.distance(this.x, this.y, game.boss.x, game.boss.y) < r + game.boss.radius) {
-              game.boss.takeDamage(aoeDmg, game);
+            for (const __boss of game.bosses) {
+              if (!__boss || !__boss.alive) continue;
+              if (Utils.distance(this.x, this.y, __boss.x, __boss.y) < r + __boss.radius) {
+                __boss.takeDamage(aoeDmg, game);
+              }
             }
             // 視覺
             if (this.kind === 'eldritchFire') {
@@ -323,6 +326,45 @@ class Projectile {
             }
             game.shake(this.kind === 'eldritchVoid' ? 9 : 5, 0.25);
           }
+          // 爆裂連矢 buff:命中產生大範圍爆炸
+          if (this.boomOnHit > 0) {
+            const br = this.boomOnHit;
+            // 黑紅爆炸視覺
+            game.particles.add({
+              x: this.x, y: this.y, vx: 0, vy: 0,
+              life: 0.4, max: 0.4, color: 'rgba(255,80,30,0.7)',
+              size: br * 1.4, type: 'flash'
+            });
+            game.particles.explosion(this.x, this.y, br);
+            game.particles.shockRing(this.x, this.y, br * 1.2, '#ff5020');
+            game.particles.shockRing(this.x, this.y, br * 0.8, '#ffd86b');
+            // 額外火花環
+            for (let k = 0; k < 16; k++) {
+              const a = (k / 16) * Math.PI * 2;
+              const sp = Utils.randomRange(180, 380);
+              game.particles.add({
+                x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                life: 0.5, max: 0.5, color: Utils.pick(['#ffd86b', '#ff8030', '#fff']),
+                size: 4, type: 'fire', grow: -5
+              });
+            }
+            game.shake(6, 0.22);
+            AudioMgr.explosion();
+            const aoeDmg = this.damage * 0.7;
+            for (const e2 of game.enemies) {
+              if (!e2.alive) continue;
+              if (Utils.distance(this.x, this.y, e2.x, e2.y) < br + e2.radius) {
+                e2.takeDamage(aoeDmg, game);
+                game.particles.damageText(e2.x, e2.y - 10, aoeDmg, '#ffaa33');
+              }
+            }
+            for (const b2 of game.bosses) {
+              if (!b2 || !b2.alive) continue;
+              if (Utils.distance(this.x, this.y, b2.x, b2.y) < br + b2.radius) {
+                b2.takeDamage(aoeDmg * 0.7, game);
+              }
+            }
+          }
           // 穿透
           if (this.pierce > 0) {
             this.pierce--;
@@ -335,13 +377,34 @@ class Projectile {
           return;
         }
       }
-      if (game.boss && game.boss.alive && Collision.circleCircle(this, game.boss)) {
-        game.boss.takeDamage(this.damage, game);
-        game.particles.damageText(game.boss.x, game.boss.y - 10, this.damage, '#fff066', true);
-        this.alive = false;
-        if (this.aoe > 0) this.detonate(game);
-        else game.particles.bulletImpact(this.x, this.y, this.color);
-        return;
+      for (const __boss of game.bosses) {
+        if (!__boss || !__boss.alive) continue;
+        if (Collision.circleCircle(this, __boss)) {
+          __boss.takeDamage(this.damage, game);
+          game.particles.damageText(__boss.x, __boss.y - 10, this.damage, '#fff066', true);
+          this.alive = false;
+          if (this.aoe > 0) this.detonate(game);
+          else game.particles.bulletImpact(this.x, this.y, this.color);
+          // 爆裂連矢:命中爆炸
+          if (this.boomOnHit > 0) {
+            const br = this.boomOnHit;
+            game.particles.explosion(this.x, this.y, br);
+            game.shake(6, 0.22);
+            for (const e2 of game.enemies) {
+              if (!e2.alive) continue;
+              if (Utils.distance(this.x, this.y, e2.x, e2.y) < br + e2.radius) {
+                e2.takeDamage(this.damage * 0.6, game);
+              }
+            }
+            for (const b2 of game.bosses) {
+              if (!b2 || !b2.alive || b2 === __boss) continue;
+              if (Utils.distance(this.x, this.y, b2.x, b2.y) < br + b2.radius) {
+                b2.takeDamage(this.damage * 0.5, game);
+              }
+            }
+          }
+          return;
+        }
       }
     }
   }

@@ -7,7 +7,7 @@ const CHAR_CLASSES = {
     id: 'mage',
     name: '法師',
     title: '隕石主宰',
-    desc: '揮舞隕石杖，普攻射出可怕魔粒子。\n隕石術與冰封新星近乎全螢幕特效。',
+    desc: '揮舞隕石杖，普攻射出可怕魔粒子。\n隕石術、冰封新星、黑炎隕石雨皆全螢幕特效。',
     color: '#b06aff',
     accent: '#dca6ff',
     starting: {
@@ -22,7 +22,7 @@ const CHAR_CLASSES = {
     id: 'archer',
     name: '弓手',
     title: '荒野獵神',
-    desc: '揮舞巨弓射出大型箭矢。\n冰巨箭附魔時普攻變 5 倍大冰箭、命中凍結。',
+    desc: '揮舞巨弓射出大型箭矢。\n冰巨箭凍結、爆裂連矢命中爆炸大範圍。',
     color: '#5cdb5c',
     accent: '#aaffaa',
     starting: {

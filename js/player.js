@@ -54,6 +54,8 @@ class Player {
     this.frenzyActive = false; this.frenzyEnd = 0;
     // 弓手 冰巨箭
     this.iceArrowActive = false; this.iceArrowEnd = 0;
+    // 弓手 爆裂連矢
+    this.boomShotActive = false; this.boomShotEnd = 0; this.boomShotRadius = 130;
     this.shopUpgrades = { maxHp: 0, maxMp: 0, attack: 0, defense: 0 };
 
     this.walkPhase = 0;
@@ -112,6 +114,19 @@ class Player {
     if (this.darkSoulEnd && now > this.darkSoulEnd) { this.darkSoulActive = false; this.darkSoulEnd = 0; }
     if (this.frenzyEnd && now > this.frenzyEnd) { this.frenzyActive = false; this.frenzyEnd = 0; }
     if (this.iceArrowEnd && now > this.iceArrowEnd) { this.iceArrowActive = false; this.iceArrowEnd = 0; }
+    if (this.boomShotEnd && now > this.boomShotEnd) { this.boomShotActive = false; this.boomShotEnd = 0; }
+
+    // 爆裂連矢:周身橘紅火焰
+    if (this.boomShotActive && Math.random() < dt * 16) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 18 + Math.random() * 12;
+      game.particles.add({
+        x: this.x + Math.cos(a) * r, y: this.y + Math.sin(a) * r,
+        vx: Utils.jitter(20), vy: -Utils.randomRange(30, 70),
+        life: 0.6, max: 0.6, color: Utils.pick(['#ff5020', '#ff8030', '#ffd86b']),
+        size: Utils.randomRange(3, 6), type: 'fire', grow: -5
+      });
+    }
 
     // 冰巨箭：周身冰晶霧
     if (this.iceArrowActive && Math.random() < dt * 18) {
@@ -254,6 +269,8 @@ class Player {
       const sy = this.y + Math.sin(this.facing) * (this.radius + 10);
       const rngMult = (this.classMods.rangedMult || 1);
       const dmg = (w.damage + this.attack * 0.3) * rngMult * buff * invisBoost;
+      // 爆裂連矢:此次發射的所有箭都標記爆炸半徑
+      const boomR = this.boomShotActive ? this.boomShotRadius : 0;
 
       // ===== 法師杖（隕石/焚天/創世）：可怕魔粒子 =====
       if (w.projectileKind && w.projectileKind.startsWith('eldritch')) {
@@ -293,6 +310,7 @@ class Player {
           if (w.alwaysIce || this.iceArrowActive) {
             p.iceArrow = true; p.radius = 24; p.pierce = 99; p.freezeOnHit = 2.0;
           }
+          if (boomR) p.boomOnHit = boomR;
           game.projectiles.push(p);
           game.particles.muzzleFlash(sx2, sy2, ang, '#88ccff');
         }
@@ -307,6 +325,7 @@ class Player {
         p.radius = 28;
         p.pierce = 99;
         p.freezeOnHit = 2.5;
+        if (boomR) p.boomOnHit = boomR;
         game.projectiles.push(p);
         game.particles.muzzleFlash(sx, sy, this.facing, '#aaccff');
         game.particles.add({ x: sx, y: sy, vx:0, vy:0, life:0.3, max:0.3, color:'#fff', size:60, type:'flash' });
@@ -325,6 +344,7 @@ class Player {
           p.radius = 28;
           p.pierce = 99;
           p.freezeOnHit = 2.5;
+          if (boomR) p.boomOnHit = boomR;
           game.projectiles.push(p);
           // 出口超強冰爆
           game.particles.muzzleFlash(sx, sy, this.facing, '#aaccff');
@@ -358,6 +378,7 @@ class Player {
           const p = new Projectile(sx, sy, this.facing, w.projectileSpeed, dmg * 1.3, 'player', 'giantarrow');
           p.radius = 11;
           p.pierce = 1;
+          if (boomR) p.boomOnHit = boomR;
           game.projectiles.push(p);
           game.particles.muzzleFlash(sx, sy, this.facing, '#ffd86b');
           game.particles.spark(sx, sy, 12, '#fff066');
@@ -365,8 +386,10 @@ class Player {
           AudioMgr.bowShoot();
         }
       } else {
-        // 一般弓箭（其他職業）
-        game.projectiles.push(new Projectile(sx, sy, this.facing, w.projectileSpeed, dmg, 'player', 'arrow'));
+        // 一般弓箭(其他職業)
+        const p = new Projectile(sx, sy, this.facing, w.projectileSpeed, dmg, 'player', 'arrow');
+        if (boomR) p.boomOnHit = boomR;
+        game.projectiles.push(p);
         game.particles.muzzleFlash(sx, sy, this.facing, '#fff066');
         game.shake(2, 0.08);
         AudioMgr.bowShoot();
@@ -459,16 +482,16 @@ class Player {
           }
         }
       }
-      if (game.boss && game.boss.alive) {
-        const d = Utils.distance(this.x, this.y, game.boss.x, game.boss.y);
-        if (d <= w.range + game.boss.radius) {
-          const ang = Utils.angle(this.x, this.y, game.boss.x, game.boss.y);
-          if (Math.abs(Utils.angleDiff(ang, this.facing)) < w.arc / 2) {
-            game.boss.takeDamage(dmg, game);
-            game.particles.damageText(game.boss.x, game.boss.y - 10, dmg, '#fff', true);
-            AudioMgr.hit();
-            hitAny = true;
-          }
+      for (const __boss of game.bosses) {
+        if (!__boss || !__boss.alive) continue;
+        const d = Utils.distance(this.x, this.y, __boss.x, __boss.y);
+        if (d > w.range + __boss.radius) continue;
+        const ang = Utils.angle(this.x, this.y, __boss.x, __boss.y);
+        if (Math.abs(Utils.angleDiff(ang, this.facing)) < w.arc / 2) {
+          __boss.takeDamage(dmg, game);
+          game.particles.damageText(__boss.x, __boss.y - 10, dmg, '#fff', true);
+          AudioMgr.hit();
+          hitAny = true;
         }
       }
       if (hitAny) game.shake(2, 0.08);

@@ -1064,10 +1064,10 @@ class Boss {
     }
   }
 
-  drawHpBarUI(ctx, canvasW) {
+  drawHpBarUI(ctx, canvasW, index = 0) {
     const w = canvasW * 0.72;
     const x = (canvasW - w) / 2;
-    const y = 12;
+    const y = 12 + index * 38;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     Utils.roundRect(ctx, x - 6, y - 6, w + 12, 38, 6); ctx.fill();
     ctx.fillStyle = '#330000';
@@ -1101,5 +1101,16 @@ class Boss {
   }
 }
 
-// 對應每個 Boss 波
-const BOSS_BY_WAVE = { 5: 'beast', 10: 'mage', 15: 'mech' };
+// 對應每個 Boss 波(陣列形式:同波可多隻 Boss 同時出現)
+const BOSS_BY_WAVE = {
+  3:  ['beast'],
+  5:  ['beast', 'beast'],          // 雙巨獸
+  7:  ['mage'],
+  8:  ['mage', 'beast'],           // 法師 + 巨獸
+  10: ['mech'],
+  11: ['beast', 'mage'],           // 雙王
+  12: ['mech', 'mage'],
+  13: ['mech', 'beast', 'mage'],   // 三王同台
+  14: ['mech', 'mech'],            // 雙機械
+  15: ['mech', 'mage', 'beast']    // 最終三王
+};
