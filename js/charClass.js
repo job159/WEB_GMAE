@@ -37,7 +37,7 @@ const CHAR_CLASSES = {
     id: 'berserker',
     name: '狂戰士',
     title: '吞噬者',
-    desc: '揮舞 3 倍身形巨砍刀，每一斬皆帶衝擊波。\n黑魂附體釋放巨大月牙、狂熱倍增攻速。',
+    desc: '揮舞 3 倍身形巨砍刀，每一斬皆帶衝擊波。\n黑魂月牙、狂熱倍速、血祭斬撕裂半屏。',
     color: '#3a0a3a',
     accent: '#cc3030',
     starting: {

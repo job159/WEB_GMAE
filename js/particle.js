@@ -347,10 +347,12 @@ class ParticleSystem {
   // ---- 傷害飄字 ----
   damageText(x, y, value, color = '#fff', big = false) {
     if (this.texts.length >= this.maxTexts) this.texts.shift();
+    const num = typeof value === 'number' ? Math.round(value) : value;
+    const auto = typeof value === 'number' && value >= 100;
     this.texts.push({
-      x, y, vx: Utils.jitter(15), vy: -60,
-      life: 0.9, max: 0.9, text: '' + Math.round(value),
-      color, big
+      x, y, vx: Utils.jitter(20), vy: -70,
+      life: 1.0, max: 1.0, text: '' + num,
+      color, big: big || auto
     });
   }
 
@@ -576,8 +578,20 @@ class ParticleSystem {
       const s = Utils.worldToScreen(t.x, t.y, camera);
       const alpha = Utils.clamp(t.life / t.max, 0, 1);
       ctx.globalAlpha = alpha;
+      // big 數字 跳出時放大彈跳效果
+      const popup = t.life > t.max - 0.15 ? 1.3 - (t.max - t.life) * 2 : 1;
+      const scale = t.big ? 1.5 * popup : popup;
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.scale(scale, scale);
+      if (t.big) {
+        ctx.shadowColor = t.color;
+        ctx.shadowBlur = 10;
+      }
       ctx.font = t.big ? 'bold 22px sans-serif' : 'bold 14px sans-serif';
-      Utils.strokeText(ctx, t.text, s.x, s.y, t.color, '#000', t.big ? 4 : 3);
+      Utils.strokeText(ctx, t.text, 0, 0, t.color, '#000', t.big ? 4 : 3);
+      ctx.shadowBlur = 0;
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';

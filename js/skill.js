@@ -70,7 +70,7 @@ const SKILL_DEFS = {
   // 黑靈狂戰士
   b_darksoul: { name: '黑魂附體', cost: 35, cd: 12, desc: '8 秒附魔：每次揮砍釋放巨大黑色月牙' },
   b_frenzy:   { name: '狂熱',     cost: 40, cd: 14, desc: '6 秒攻速 +50%、移速 +30%' },
-  b_recovery: { name: '恢復',     cost: 45, cd: 18, desc: '回 50% HP + 1 秒無敵' }
+  b_recovery: { name: '血祭斬擊', cost: 50, cd: 14, desc: '前方近半屏幕巨型扇形斬,擊殺回血' }
 };
 
 const ActiveSkills = {
@@ -111,21 +111,38 @@ const ActiveSkills = {
   // ============================================================
   castMap: {
 
-    // 狂暴斬擊：4 道（可被 mut.slashExtra 增加）連續弧形劍光
+    // 狂暴斬擊:6 道(可被 mut.slashExtra 增加)連續弧形劍光,光更亮、震波更大
     w_slash(game) {
       const player = game.player;
-      const slashes = 4 + (game.mut?.slashExtra || 0);
-      const baseRange = 100;
-      const baseDmg = (30 + player.attack * 1.0) * ActiveSkills.dmgMult(game);
+      const slashes = 6 + (game.mut?.slashExtra || 0);
+      const baseRange = 140;
+      const baseDmg = (38 + player.attack * 1.15) * ActiveSkills.dmgMult(game);
+      // 中央爆閃
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.3, max: 0.3, color: 'rgba(255,80,80,0.7)',
+        size: 140, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 160, '#ff5050');
       for (let i = 0; i < slashes; i++) {
-        const delay = i * 0.09;
+        const delay = i * 0.07;
         const dir = i % 2 === 0 ? 1 : -1;
-        const ang = player.facing + dir * (0.2 + i * 0.05);
-        const range = baseRange + i * 6;
+        const ang = player.facing + dir * (0.18 + i * 0.05);
+        const range = baseRange + i * 8;
         const color = i % 2 === 0 ? '#ff5050' : '#ffaa33';
         game.schedule(delay, () => {
           game.particles.slashArc(player.x, player.y, ang, range, color);
-          game.particles.spark(player.x, player.y, 14, '#ffaa33');
+          game.particles.slashArc(player.x, player.y, ang, range * 0.7, '#fff');
+          game.particles.spark(player.x, player.y, 18, '#ffaa33');
+          // 從玩家向斬擊方向噴火花
+          for (let j = 0; j < 6; j++) {
+            const a2 = ang + Utils.jitter(0.35);
+            const sp = Utils.randomRange(200, 380);
+            game.particles.add({
+              x: player.x, y: player.y, vx: Math.cos(a2) * sp, vy: Math.sin(a2) * sp,
+              life: 0.4, max: 0.4, color: color, size: 4, type: 'fire', grow: -6
+            });
+          }
           // 烈焰劍氣：附加燃燒
           const fire = !!game.mut?.slashFire;
           for (const e of game.enemies) {
@@ -151,10 +168,18 @@ const ActiveSkills = {
             }
           }
           AudioMgr.swing();
-          game.shake(3, 0.08);
+          game.shake(5, 0.12);
         });
       }
-      Utils.toast('狂暴斬擊！');
+      // 終結爆閃 + 震屏
+      game.schedule(slashes * 0.07, () => {
+        game.particles.shockRing(player.x, player.y, baseRange + slashes * 8 + 30, '#fff');
+        game.particles.explosion(player.x + Math.cos(player.facing) * baseRange,
+                                 player.y + Math.sin(player.facing) * baseRange, 80);
+        game.shake(10, 0.3);
+        AudioMgr.explosion();
+      });
+      Utils.bigToast('狂暴斬擊！');
     },
 
     // 大地震動：以自身為中心 8 方向裂縫 + AOE 擊退
@@ -198,9 +223,31 @@ const ActiveSkills = {
           game.particles.damageText(game.boss.x, game.boss.y - 12, baseDmg * 1.2, '#aa6020', true);
         }
       }
+      // 中央巨大爆閃 + 額外四道火焰柱
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.5, max: 0.5, color: 'rgba(255,170,48,0.7)',
+        size: baseRadius * 1.6, type: 'flash'
+      });
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        const tx = player.x + Math.cos(a) * baseRadius * 0.6;
+        const ty = player.y + Math.sin(a) * baseRadius * 0.6;
+        game.schedule(0.1 + i * 0.03, () => {
+          for (let j = 0; j < 12; j++) {
+            game.particles.add({
+              x: tx, y: ty,
+              vx: Utils.jitter(40), vy: -Utils.randomRange(60, 180) - j * 8,
+              life: 0.9, max: 0.9, color: Utils.pick(['#ff5020', '#ff8030', '#ffd86b']),
+              size: Utils.randomRange(5, 10), type: 'fire', grow: -4
+            });
+          }
+          game.particles.shockRing(tx, ty, 70, '#ff8030');
+        });
+      }
       AudioMgr.explosion();
       AudioMgr.shockwave();
-      game.shake(14, 0.5);
+      game.shake(20, 0.6);
     },
 
     // 血怒之力：回血 + 攻擊力暫時提升
@@ -217,8 +264,14 @@ const ActiveSkills = {
       player.attackBuffEnd = performance.now() / 1000 + dur;
       player.furyAura = dur;
       // 視覺
-      game.particles.shockRing(player.x, player.y, 100, '#ff3030');
-      game.particles.shockRing(player.x, player.y, 60, '#ff8030');
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.4, max: 0.4, color: 'rgba(255,80,40,0.7)',
+        size: 180, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 180, '#ff3030');
+      game.particles.shockRing(player.x, player.y, 130, '#ff5050');
+      game.particles.shockRing(player.x, player.y, 80, '#ff8030');
       for (let i = 0; i < 24; i++) {
         const a = (i / 24) * Math.PI * 2;
         game.particles.add({
@@ -436,8 +489,17 @@ const ActiveSkills = {
       game.healZones = game.healZones || [];
       game.healZones.push({ x: player.x, y: player.y, radius, life: dur, max: dur });
       // 視覺
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.45, max: 0.45, color: 'rgba(110,221,110,0.65)',
+        size: 200, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 180, '#3a8a3a');
+      game.particles.shockRing(player.x, player.y, 130, '#6fdd6f');
+      game.particles.shockRing(player.x, player.y, 80, '#aaffaa');
       game.particles.runeCircle(player.x, player.y, radius, dur);
       game.particles.heal(player.x, player.y);
+      game.shake(4, 0.2);
       // 向上飄綠光（多）
       for (let i = 0; i < 28; i++) {
         const a = (i / 28) * Math.PI * 2;
@@ -459,30 +521,59 @@ const ActiveSkills = {
     // 弓手 Archer
     // ============================================================
 
-    // 箭矢風暴：12 道（+mut）扇形齊射
+    // 箭矢風暴:18 道(+mut)寬扇形齊射,更亮更震
     a_storm(game) {
       const player = game.player;
-      const count = 12 + (game.mut?.stormExtra || 0);
+      const count = 18 + (game.mut?.stormExtra || 0);
       const baseAng = player.facing;
-      const spread = Math.PI / 3;
-      const dmg = (18 + player.attack * 0.5) * ActiveSkills.dmgMult(game);
+      const spread = Math.PI * 0.6;   // 加大到 108°
+      const dmg = (22 + player.attack * 0.55) * ActiveSkills.dmgMult(game);
+      // 第一波
       for (let i = 0; i < count; i++) {
         const t = count > 1 ? (i / (count - 1) - 0.5) : 0;
         const ang = baseAng + t * spread;
         const sx = player.x + Math.cos(ang) * (player.radius + 8);
         const sy = player.y + Math.sin(ang) * (player.radius + 8);
-        const p = new Projectile(sx, sy, ang, 620, dmg, 'player', 'arrow');
-        p.pierce = 1 + (game.mut?.pierceAll || 0);
+        const p = new Projectile(sx, sy, ang, 680, dmg, 'player', 'arrow');
+        p.pierce = 2 + (game.mut?.pierceAll || 0);
         game.projectiles.push(p);
       }
-      // 大型槍口扇形
+      // 0.15 秒後第二波(輕量補射)
+      game.schedule(0.15, () => {
+        for (let i = 0; i < Math.floor(count * 0.7); i++) {
+          const t = (i / (count - 1) - 0.5) + Utils.jitter(0.05);
+          const ang = baseAng + t * spread;
+          const sx = player.x + Math.cos(ang) * (player.radius + 8);
+          const sy = player.y + Math.sin(ang) * (player.radius + 8);
+          const p = new Projectile(sx, sy, ang, 720, dmg * 0.85, 'player', 'arrow');
+          p.pierce = 2 + (game.mut?.pierceAll || 0);
+          game.projectiles.push(p);
+        }
+        game.particles.muzzleFlash(player.x + Math.cos(baseAng) * 10,
+                                    player.y + Math.sin(baseAng) * 10, baseAng, '#fff066');
+      });
+      // 巨型槍口扇形 + 中央爆閃
       game.particles.muzzleFlash(player.x + Math.cos(baseAng) * 10,
                                   player.y + Math.sin(baseAng) * 10, baseAng, '#ffd86b');
-      game.particles.shockRing(player.x, player.y, 40, '#ffd86b');
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.3, max: 0.3, color: '#fff066', size: 120, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 80, '#ffd86b');
+      game.particles.shockRing(player.x, player.y, 50, '#fff066');
+      // 後座葉子噴射
+      for (let i = 0; i < 16; i++) {
+        const a = baseAng + Math.PI + Utils.jitter(0.5);
+        const sp = Utils.randomRange(120, 280);
+        game.particles.add({
+          x: player.x, y: player.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: 0.5, max: 0.5, color: '#fff066', size: 3, type: 'spark'
+        });
+      }
       AudioMgr.bowShoot();
       AudioMgr.bowShoot();
-      game.shake(5, 0.2);
-      Utils.toast('箭矢風暴！');
+      game.shake(8, 0.3);
+      Utils.bigToast('箭矢風暴！');
     },
 
     // 雷霆穿心：超強直線雷箭，貫穿全場
@@ -534,9 +625,26 @@ const ActiveSkills = {
       player.speedBuffMult = 1.5;
       // 葉子漩渦
       game.particles.leafSwirl(player.x, player.y);
-      // 綠色閃光
-      game.particles.shockRing(player.x, player.y, 80, '#5cdb5c');
-      game.particles.shockRing(player.x, player.y, 50, '#aaffaa');
+      game.particles.leafSwirl(player.x, player.y);
+      // 綠色閃光多層
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.35, max: 0.35, color: 'rgba(110,221,110,0.6)',
+        size: 200, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 160, '#3a8a3a');
+      game.particles.shockRing(player.x, player.y, 110, '#5cdb5c');
+      game.particles.shockRing(player.x, player.y, 70, '#aaffaa');
+      // 葉風暴向上
+      for (let i = 0; i < 24; i++) {
+        game.particles.add({
+          x: player.x + Utils.jitter(40), y: player.y + Utils.jitter(20),
+          vx: Utils.jitter(40), vy: -Utils.randomRange(60, 140),
+          life: 1.4, max: 1.4, color: Utils.pick(['#5cdb5c', '#aaffaa', '#3aa83a']),
+          size: 4, type: 'leaf', rot: Math.random() * 6
+        });
+      }
+      game.shake(5, 0.2);
       game.particles.damageText(player.x, player.y - 24, '+' + amt, '#6fdd6f', true);
       AudioMgr.heal();
       Utils.bigToast('獵人之擁！');
@@ -598,20 +706,34 @@ const ActiveSkills = {
     // 黑靈狂戰士 Berserker
     // ============================================================
 
-    // 黑魂附體：8 秒附魔，每次揮砍釋放黑色月牙
+    // 黑魂附體:8 秒附魔,每次揮砍釋放黑色月牙
     b_darksoul(game) {
       const player = game.player;
       const dur = 8 + (game.mut?.darksoulDur || 0);
       player.darkSoulEnd = performance.now() / 1000 + dur;
       player.darkSoulActive = true;
       // 中央巨大暗紫衝擊
-      game.particles.shockRing(player.x, player.y, 140, '#3a0a3a');
-      game.particles.shockRing(player.x, player.y, 90, '#5a0a5a');
-      game.particles.shockRing(player.x, player.y, 50, '#cc3030');
+      game.particles.shockRing(player.x, player.y, 220, '#1a001a');
+      game.particles.shockRing(player.x, player.y, 160, '#3a0a3a');
+      game.particles.shockRing(player.x, player.y, 100, '#5a0a5a');
+      game.particles.shockRing(player.x, player.y, 60, '#cc3030');
       game.particles.add({
         x: player.x, y: player.y, vx: 0, vy: 0,
-        life: 0.4, max: 0.4, color: '#5a0a5a', size: 100, type: 'flash'
+        life: 0.55, max: 0.55, color: 'rgba(20,0,30,0.7)', size: 280, type: 'flash'
       });
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.4, max: 0.4, color: '#5a0a5a', size: 140, type: 'flash'
+      });
+      // 8 道月牙浮現
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const r = 100;
+        game.schedule(i * 0.04, () => {
+          game.particles.slashArc(player.x + Math.cos(a) * r, player.y + Math.sin(a) * r,
+                                    a + Math.PI / 2, 60, '#3a0a3a');
+        });
+      }
       // 環狀邪氣粒子
       for (let i = 0; i < 36; i++) {
         const a = (i / 36) * Math.PI * 2;
@@ -647,10 +769,16 @@ const ActiveSkills = {
       const dur = 6 + (game.mut?.frenzyDur || 0);
       player.frenzyEnd = performance.now() / 1000 + dur;
       player.frenzyActive = true;
-      // 血紅震波 + 紅霧
-      game.particles.shockRing(player.x, player.y, 120, '#cc3030');
-      game.particles.shockRing(player.x, player.y, 70, '#ff3030');
-      game.particles.shockRing(player.x, player.y, 40, '#fff');
+      // 血紅震波 + 紅霧 + 巨型爆閃
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.45, max: 0.45, color: 'rgba(255,40,40,0.7)',
+        size: 220, type: 'flash'
+      });
+      game.particles.shockRing(player.x, player.y, 200, '#5a0a0a');
+      game.particles.shockRing(player.x, player.y, 140, '#cc3030');
+      game.particles.shockRing(player.x, player.y, 90, '#ff3030');
+      game.particles.shockRing(player.x, player.y, 50, '#fff');
       // 紅色血滴向上爆射
       for (let i = 0; i < 30; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -678,49 +806,130 @@ const ActiveSkills = {
       Utils.bigToast('狂熱！');
     },
 
-    // 恢復：50% HP + 1 秒無敵 + 暴力視覺
+    // 血祭斬擊:前方扇形大範圍 AOE(近半屏幕),擊殺回血
     b_recovery(game) {
       const player = game.player;
-      const pct = game.mut?.recoveryBoost ? 0.7 : 0.5;
-      const amt = Math.floor(player.maxHp * pct);
-      player.hp = Math.min(player.maxHp, player.hp + amt);
-      player.invuln = game.mut?.recoveryBoost ? 3 : 1;
-      // 血腥暴力的回血視覺
-      game.particles.shockRing(player.x, player.y, 100, '#cc3030');
-      game.particles.shockRing(player.x, player.y, 60, '#5a0a0a');
-      // 血紅光柱
+      const range = 460 * (game.mut?.recoveryBoost ? 1.2 : 1);   // 近半屏幕
+      const halfAngle = Math.PI * 0.42;                          // ~150° 扇形,接近半圓
+      const baseDmg = (160 + player.attack * 2.2) * ActiveSkills.dmgMult(game);
+      const facing = player.facing;
+
+      // 中央巨型紅黑爆閃
       game.particles.add({
         x: player.x, y: player.y, vx: 0, vy: 0,
-        life: 0.5, max: 0.5, color: '#cc3030', size: 120, type: 'flash'
+        life: 0.55, max: 0.55, color: 'rgba(255,40,40,0.7)',
+        size: 220, type: 'flash'
       });
-      // 大量血滴向上飛
-      for (let i = 0; i < 40; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.random() * 60;
-        game.particles.add({
-          x: player.x + Math.cos(a) * r,
-          y: player.y + Math.sin(a) * r,
-          vx: Math.cos(a) * 60,
-          vy: Math.sin(a) * 60 - Utils.randomRange(60, 120),
-          life: 1.0, max: 1.0,
-          color: Utils.pick(['#cc3030', '#5a0a0a', '#ff3030', '#0a0000']),
-          size: Utils.randomRange(4, 8), type: 'blood', gravity: 240
+      game.particles.add({
+        x: player.x, y: player.y, vx: 0, vy: 0,
+        life: 0.45, max: 0.45, color: 'rgba(40,0,10,0.7)',
+        size: 320, type: 'flash'
+      });
+
+      // 4 道大型弧形劍光填滿扇形
+      const slashSweeps = [-0.35, -0.12, 0.12, 0.35];
+      for (let i = 0; i < slashSweeps.length; i++) {
+        const off = slashSweeps[i];
+        game.schedule(i * 0.05, () => {
+          const ang = facing + off;
+          game.particles.slashArc(player.x, player.y, ang, range, i % 2 === 0 ? '#ff2030' : '#cc1030');
+          game.particles.slashArc(player.x, player.y, ang, range * 0.85, '#fff');
         });
       }
-      // 上升的恢復粒子
-      for (let i = 0; i < 24; i++) {
-        game.particles.add({
-          x: player.x + Utils.jitter(30), y: player.y + Utils.jitter(15),
-          vx: Utils.jitter(15), vy: -Utils.randomRange(50, 110),
-          life: 1.2, max: 1.2, color: Utils.pick(['#ff3030', '#cc3030', '#fff']),
-          size: Utils.randomRange(4, 6), type: 'fire', grow: -4
+
+      // 主弧形:沿扇形邊緣繪製血色光波
+      for (let i = 0; i < 14; i++) {
+        const t = i / 13;
+        const ang = facing + (t - 0.5) * halfAngle * 2;
+        game.schedule(t * 0.18, () => {
+          // 沿著扇形外緣噴血
+          for (let j = 0; j < 4; j++) {
+            const r = range * (0.6 + j * 0.13);
+            game.particles.add({
+              x: player.x + Math.cos(ang) * r * 0.4,
+              y: player.y + Math.sin(ang) * r * 0.4,
+              vx: Math.cos(ang) * 350,
+              vy: Math.sin(ang) * 350,
+              life: 0.5, max: 0.5,
+              color: Utils.pick(['#ff2030', '#cc1030', '#fff', '#5a0a0a']),
+              size: Utils.randomRange(5, 9),
+              type: 'fire', grow: -6
+            });
+          }
         });
       }
-      game.particles.damageText(player.x, player.y - 24, '+' + amt, '#ff5050', true);
-      AudioMgr.heal();
+
+      // 血色震波環(沿前方)
+      const ringX = player.x + Math.cos(facing) * range * 0.5;
+      const ringY = player.y + Math.sin(facing) * range * 0.5;
+      game.particles.shockRing(player.x, player.y, range, '#ff2030');
+      game.particles.shockRing(player.x, player.y, range * 0.7, '#cc1030');
+      game.particles.shockRing(ringX, ringY, 200, '#fff');
+
+      // 血滴向前濺射
+      for (let i = 0; i < 50; i++) {
+        const a = facing + Utils.jitter(halfAngle);
+        const sp = Utils.randomRange(250, 580);
+        game.particles.add({
+          x: player.x, y: player.y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
+          life: 0.8, max: 0.8,
+          color: Utils.pick(['#cc3030', '#5a0a0a', '#ff3030', '#0a0000', '#fff']),
+          size: Utils.randomRange(4, 8), type: 'blood', gravity: 120
+        });
+      }
+      // 持續紅霧
+      for (let i = 0; i < 30; i++) {
+        const a = facing + Utils.jitter(halfAngle);
+        game.particles.add({
+          x: player.x + Math.cos(a) * Utils.randomRange(40, range * 0.6),
+          y: player.y + Math.sin(a) * Utils.randomRange(40, range * 0.6),
+          vx: Math.cos(a) * 30, vy: Math.sin(a) * 30 - 50,
+          life: 1.3, max: 1.3, color: 'rgba(200,40,40,0.65)',
+          size: Utils.randomRange(8, 14), type: 'smoke', grow: 8
+        });
+      }
+
+      // 扇形內所有敵人吃傷害 + 擊飛 + 暴擊閃光
+      let killed = 0;
+      for (const e of game.enemies) {
+        if (!e.alive) continue;
+        const d = Utils.distance(player.x, player.y, e.x, e.y);
+        if (d > range + e.radius) continue;
+        const a = Utils.angle(player.x, player.y, e.x, e.y);
+        if (Math.abs(Utils.angleDiff(a, facing)) > halfAngle) continue;
+        const before = e.alive;
+        e.takeDamage(baseDmg, game);
+        e.applyKnockback(player.x, player.y, 460);
+        game.particles.damageText(e.x, e.y - 12, baseDmg, '#ff2030');
+        // 命中爆閃
+        game.particles.add({
+          x: e.x, y: e.y, vx: 0, vy: 0,
+          life: 0.2, max: 0.2, color: '#fff', size: 28, type: 'flash'
+        });
+        if (before && !e.alive) killed++;
+      }
+      // Boss 也吃
+      if (game.boss && game.boss.alive) {
+        const d = Utils.distance(player.x, player.y, game.boss.x, game.boss.y);
+        if (d < range + game.boss.radius) {
+          const a = Utils.angle(player.x, player.y, game.boss.x, game.boss.y);
+          if (Math.abs(Utils.angleDiff(a, facing)) < halfAngle) {
+            game.boss.takeDamage(baseDmg * 1.15, game);
+            game.particles.damageText(game.boss.x, game.boss.y - 14, Math.round(baseDmg * 1.15), '#ff2030', true);
+          }
+        }
+      }
+      // 擊殺回血:每擊殺 +12 HP,並至少回 15
+      const heal = Math.max(15, killed * 12);
+      player.hp = Math.min(player.maxHp, player.hp + heal);
+      if (heal > 0) game.particles.damageText(player.x, player.y - 30, '+' + heal, '#6fdd6f', true);
+
       AudioMgr.shockwave();
-      game.shake(6, 0.3);
-      Utils.bigToast('恢復！');
+      AudioMgr.swing();
+      AudioMgr.explosion();
+      game.shake(14, 0.45);
+      Utils.bigToast('血祭斬擊！');
     }
 
   } // end castMap

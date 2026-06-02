@@ -25,59 +25,66 @@ class Boss {
 
   initBeast() {
     this.name = '荒野巨獸';
-    this.maxHp = Math.round(700 * this.scale);
+    this.maxHp = Math.round(1300 * this.scale);
     this.hp = this.maxHp;
-    this.speed = 65;
-    this.damage = Math.round(28 * this.scale);
-    this.radius = 38;
+    this.speed = 70;
+    this.damage = Math.round(32 * this.scale);
+    this.radius = 64;
     this.colorBody = '#5a2a40';
     this.colorEye = '#ff5050';
     this.attackCooldown = 0;
-    this.attackRate = 1.2;
-    this.summonCooldown = 6;
-    this.slamCooldown = 8;
-    this.chargeCooldown = 10;
+    this.attackRate = 1.0;
+    this.summonCooldown = 5;
+    this.slamCooldown = 7;
+    this.chargeCooldown = 8;
     this.chargeTimer = 0;
     this.chargeVX = 0; this.chargeVY = 0;
-    this.exp = 200; this.gold = 200 + this.waveNumber * 20;
+    this.fireRingCooldown = 11;   // 新招:地獄火環
+    this.howlCooldown = 16;       // 新招:狂暴咆哮 (全圖警報 + 衝擊)
+    this.exp = 240; this.gold = 220 + this.waveNumber * 22;
   }
 
   initMage() {
     this.name = '暗影法師';
-    this.maxHp = Math.round(900 * this.scale);
+    this.maxHp = Math.round(1500 * this.scale);
     this.hp = this.maxHp;
-    this.speed = 75;
-    this.damage = Math.round(22 * this.scale);
-    this.radius = 32;
+    this.speed = 80;
+    this.damage = Math.round(24 * this.scale);
+    this.radius = 56;
     this.colorBody = '#3a2050';
     this.colorEye = '#dca6ff';
     this.attackCooldown = 0;
-    this.attackRate = 1.5;
-    this.teleportCooldown = 5;
-    this.barrageCooldown = 7;
+    this.attackRate = 1.2;
+    this.teleportCooldown = 4;
+    this.barrageCooldown = 6;
     this.shield = 0;
-    this.shieldCooldown = 12;
-    this.summonCooldown = 8;
+    this.shieldCooldown = 11;
+    this.summonCooldown = 7;
     this.orbsAng = 0;
-    this.exp = 350; this.gold = 350;
+    this.blackholeCooldown = 13;  // 新招:虛空黑洞
+    this.runeCircleCooldown = 9;  // 新招:詛咒符文陣
+    this.spiralCooldown = 10;     // 新招:螺旋彈幕
+    this.exp = 400; this.gold = 420;
   }
 
   initMech() {
     this.name = '機械守護者';
-    this.maxHp = Math.round(1500 * this.scale);
+    this.maxHp = Math.round(2400 * this.scale);
     this.hp = this.maxHp;
-    this.speed = 50;
-    this.damage = Math.round(20 * this.scale);
-    this.radius = 44;
+    this.speed = 55;
+    this.damage = Math.round(22 * this.scale);
+    this.radius = 74;
     this.colorBody = '#444a5a';
     this.colorEye = '#ffaa30';
     this.armor = 0.4; // 受到傷害 -40%
     this.attackCooldown = 0;
-    this.attackRate = 0.8;
-    this.laserCooldown = 9;
+    this.attackRate = 0.7;
+    this.laserCooldown = 8;
     this.laserCharge = 0; // > 0 表示蓄力中
-    this.barrageCooldown = 5;
-    this.exp = 500; this.gold = 500;
+    this.barrageCooldown = 4;
+    this.empCooldown = 13;        // 新招:EMP 全屏衝擊
+    this.missileCooldown = 9;     // 新招:導向飛彈群
+    this.exp = 600; this.gold = 600;
     this.cannonAng = 0;
   }
 
@@ -96,15 +103,37 @@ class Boss {
     game.shake(3, 0.1);
     game.stats.recordDamageDealt(d);
 
-    if (!this.enraged && this.hp < this.maxHp * 0.35) {
+    if (!this.enraged && this.hp < this.maxHp * 0.4) {
       this.enraged = true;
-      if (this.type === 'beast') { this.attackRate *= 0.55; this.speed *= 1.5; }
-      if (this.type === 'mage') { this.attackRate *= 0.6; }
-      if (this.type === 'mech') { this.attackRate *= 0.6; this.laserCooldown = 5; }
+      if (this.type === 'beast') { this.attackRate *= 0.55; this.speed *= 1.55; this.fireRingCooldown = 6; }
+      if (this.type === 'mage') { this.attackRate *= 0.6; this.blackholeCooldown = 7; this.spiralCooldown = 5; }
+      if (this.type === 'mech') { this.attackRate *= 0.6; this.laserCooldown = 4; this.empCooldown = 7; }
       Utils.bigToast(`${this.name} 進入狂暴！`);
-      game.particles.shockRing(this.x, this.y, 200, '#ff5050');
+      // 多層震波 + 巨大爆閃
+      game.particles.add({
+        x: this.x, y: this.y, vx: 0, vy: 0,
+        life: 0.6, max: 0.6, color: 'rgba(255,40,40,0.7)',
+        size: 360, type: 'flash'
+      });
+      game.particles.shockRing(this.x, this.y, 380, '#ff2030');
+      game.particles.shockRing(this.x, this.y, 280, '#ff7050');
+      game.particles.shockRing(this.x, this.y, 180, '#ffd86b');
+      // 紅色血爆四射
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2;
+        const sp = Utils.randomRange(200, 480);
+        game.particles.add({
+          x: this.x, y: this.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: 1.0, max: 1.0, color: Utils.pick(['#ff2030', '#ff7050', '#fff']),
+          size: Utils.randomRange(4, 8), type: 'fire', grow: -4
+        });
+      }
+      // 玩家在範圍內也吃擊退
+      const pd = Utils.distance(this.x, this.y, game.player.x, game.player.y);
+      if (pd < 320) game.player.takeDamage(this.damage * 0.5);
       AudioMgr.bossSpawn();
-      game.shake(8, 0.4);
+      AudioMgr.explosion();
+      game.shake(18, 0.7);
     }
     if (this.hp <= 0) {
       this.alive = false; this.hp = 0;
@@ -157,7 +186,23 @@ class Boss {
       }
       this.x = Utils.clamp(this.x, this.radius, game.mapW - this.radius);
       this.y = Utils.clamp(this.y, this.radius, game.mapH - this.radius);
+      // 衝鋒拖尾:火 + 煙
+      game.particles.add({
+        x: this.x, y: this.y, vx: Utils.jitter(40), vy: Utils.jitter(40),
+        life: 0.4, max: 0.4, color: Utils.pick(['#ff5020', '#ff8030', '#ffaa33']),
+        size: 8, type: 'fire', grow: -8
+      });
       game.particles.smoke(this.x, this.y, 1, 'rgba(200,80,80,0.4)');
+      // 衝鋒結束時爆炸
+      if (this.chargeTimer <= 0) {
+        game.particles.explosion(this.x, this.y, 140);
+        game.particles.shockRing(this.x, this.y, 180, '#ff5020');
+        if (Utils.distance(this.x, this.y, player.x, player.y) < 180 + player.radius) {
+          player.takeDamage(this.damage * 0.7);
+        }
+        game.shake(8, 0.3);
+        AudioMgr.explosion();
+      }
       return;
     }
 
@@ -212,7 +257,7 @@ class Boss {
 
     this.summonCooldown -= dt;
     if (this.summonCooldown <= 0) {
-      const summons = this.enraged ? ['imp', 'imp', 'spider'] : ['slime', 'slime'];
+      const summons = this.enraged ? ['imp', 'imp', 'spider', 'imp'] : ['slime', 'slime', 'imp'];
       for (const t of summons) {
         const ang = Math.random() * Math.PI * 2;
         const r = 60 + Math.random() * 40;
@@ -221,6 +266,58 @@ class Boss {
       }
       this.summonCooldown = this.enraged ? 4 : 7;
       Utils.toast('Boss 召喚小怪！');
+    }
+
+    // 新招:地獄火環 — 12 道火彈四散
+    this.fireRingCooldown -= dt;
+    if (this.fireRingCooldown <= 0) {
+      Utils.toast('地獄火環！');
+      game.particles.shockRing(this.x, this.y, 80, '#ff5020');
+      game.particles.add({
+        x: this.x, y: this.y, vx: 0, vy: 0,
+        life: 0.4, max: 0.4, color: 'rgba(255,80,32,0.6)',
+        size: 160, type: 'flash'
+      });
+      const ringN = this.enraged ? 16 : 12;
+      for (let i = 0; i < ringN; i++) {
+        const ang = (i / ringN) * Math.PI * 2;
+        const proj = new Projectile(this.x, this.y, ang, 280, this.damage * 0.7, 'enemy', 'fireball');
+        game.projectiles.push(proj);
+      }
+      AudioMgr.explosion();
+      game.shake(7, 0.3);
+      this.fireRingCooldown = this.enraged ? 6 : 11;
+    }
+
+    // 新招:狂暴咆哮 — 衝擊環推開玩家 + 召喚一群惡魔
+    this.howlCooldown -= dt;
+    if (this.howlCooldown <= 0) {
+      Utils.bigToast('巨獸咆哮！');
+      game.particles.shockRing(this.x, this.y, 420, '#ff2030');
+      game.particles.shockRing(this.x, this.y, 320, '#ff7050');
+      game.particles.shockRing(this.x, this.y, 220, '#ffd86b');
+      game.particles.add({
+        x: this.x, y: this.y, vx: 0, vy: 0,
+        life: 0.5, max: 0.5, color: 'rgba(255,40,40,0.55)',
+        size: 360, type: 'flash'
+      });
+      if (dist < 420 + player.radius) {
+        player.takeDamage(this.damage * 0.6);
+        // 玩家推開
+        const ang = Utils.angle(this.x, this.y, player.x, player.y);
+        player.x += Math.cos(ang) * 120;
+        player.y += Math.sin(ang) * 120;
+      }
+      // 召喚火焰幽魂
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 90;
+        game.enemies.push(new Enemy('imp', this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, 1.2));
+      }
+      AudioMgr.shockwave();
+      AudioMgr.bossSpawn();
+      game.shake(14, 0.5);
+      this.howlCooldown = this.enraged ? 10 : 16;
     }
   }
 
@@ -298,13 +395,102 @@ class Boss {
     // 召喚
     this.summonCooldown -= dt;
     if (this.summonCooldown <= 0) {
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         const ang = Math.random() * Math.PI * 2;
         const r = 60 + Math.random() * 30;
-        game.enemies.push(new Enemy('dark_mage', this.x + Math.cos(ang) * r, this.y + Math.sin(ang) * r, 0.8));
+        game.enemies.push(new Enemy('dark_mage', this.x + Math.cos(ang) * r, this.y + Math.sin(ang) * r, 0.85));
         game.particles.shockRing(this.x + Math.cos(ang) * r, this.y + Math.sin(ang) * r, 25, '#b06aff');
       }
       this.summonCooldown = 10;
+    }
+
+    // 新招:虛空黑洞 — 在玩家位置生成持續傷害區
+    this.blackholeCooldown -= dt;
+    if (this.blackholeCooldown <= 0) {
+      Utils.bigToast('虛空黑洞！');
+      const bx = player.x, by = player.y;
+      // 預警紫圈
+      game.particles.shockRing(bx, by, 60, '#b06aff');
+      game.particles.shockRing(bx, by, 100, '#dca6ff');
+      game.schedule(0.8, () => {
+        // 黑洞區域
+        game.iceZones = game.iceZones || [];
+        // 用 healZone-like 但是傷害的:加新欄位 darkZones
+        game.darkZones = game.darkZones || [];
+        game.darkZones.push({ x: bx, y: by, radius: 140, life: 3.0, damage: this.damage * 0.5 });
+        game.particles.add({
+          x: bx, y: by, vx: 0, vy: 0,
+          life: 3.0, max: 3.0, color: 'rgba(20,0,40,0.7)',
+          size: 140, type: 'smoke', grow: -8
+        });
+        game.particles.shockRing(bx, by, 200, '#0a0030');
+        game.particles.shockRing(bx, by, 140, '#5a00aa');
+        // 環繞紫色粒子
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2;
+          game.particles.add({
+            x: bx + Math.cos(a) * 130, y: by + Math.sin(a) * 130,
+            vx: -Math.sin(a) * 80, vy: Math.cos(a) * 80,
+            life: 2.5, max: 2.5, color: '#b06aff',
+            size: 4, type: 'fire', grow: -1
+          });
+        }
+        AudioMgr.shockwave();
+      });
+      this.blackholeCooldown = this.enraged ? 7 : 13;
+    }
+
+    // 新招:詛咒符文陣 — 地面 3 個延遲爆破符文陣
+    this.runeCircleCooldown -= dt;
+    if (this.runeCircleCooldown <= 0) {
+      Utils.toast('詛咒符文！');
+      const sites = [];
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Utils.randomRange(80, 220);
+        sites.push({
+          x: Utils.clamp(player.x + Math.cos(a) * r, 30, game.mapW - 30),
+          y: Utils.clamp(player.y + Math.sin(a) * r, 30, game.mapH - 30)
+        });
+      }
+      for (const s of sites) {
+        // 預警 1 秒
+        game.particles.add({
+          x: s.x, y: s.y, vx: 0, vy: 0,
+          life: 1.0, max: 1.0, color: '#dca6ff',
+          size: 90, type: 'runeCircle'
+        });
+        game.schedule(1.0, () => {
+          // 爆破
+          game.particles.explosion(s.x, s.y, 90);
+          game.particles.shockRing(s.x, s.y, 120, '#b06aff');
+          game.particles.shockRing(s.x, s.y, 80, '#dca6ff');
+          if (Utils.distance(s.x, s.y, player.x, player.y) < 100 + player.radius) {
+            player.takeDamage(this.damage * 0.8);
+          }
+          AudioMgr.fireball();
+          game.shake(6, 0.25);
+        });
+      }
+      this.runeCircleCooldown = this.enraged ? 6 : 10;
+    }
+
+    // 新招:螺旋彈幕 — 旋轉吐魔法球
+    this.spiralCooldown -= dt;
+    if (this.spiralCooldown <= 0) {
+      Utils.toast('螺旋彈幕！');
+      const totalShots = this.enraged ? 30 : 20;
+      const armCount = 3;
+      for (let i = 0; i < totalShots; i++) {
+        game.schedule(i * 0.05, () => {
+          if (!this.alive) return;
+          for (let a = 0; a < armCount; a++) {
+            const ang = (a / armCount) * Math.PI * 2 + i * 0.32;
+            game.projectiles.push(new Projectile(this.x, this.y, ang, 280, this.damage * 0.5, 'enemy', 'magic'));
+          }
+        });
+      }
+      this.spiralCooldown = this.enraged ? 8 : 11;
     }
   }
 
@@ -330,32 +516,41 @@ class Boss {
       game.particles.spark(this.x + Math.cos(this.cannonAng) * 30,
                            this.y + Math.sin(this.cannonAng) * 30, 1, '#ffd86b');
       if (this.laserCharge <= 0) {
-        // 發射雷射：沿著 cannonAng 方向，500 長
-        const len = 500;
-        const ex = this.x + Math.cos(this.cannonAng) * len;
-        const ey = this.y + Math.sin(this.cannonAng) * len;
-        game.particles.chainBolt(this.x, this.y, ex, ey, '#ffd86b');
-        // 對玩家檢測：點到線段距離
-        const px = player.x - this.x;
-        const py = player.y - this.y;
-        const t = Utils.clamp((px * Math.cos(this.cannonAng) + py * Math.sin(this.cannonAng)) / len, 0, 1);
-        const ppx = this.x + Math.cos(this.cannonAng) * len * t;
-        const ppy = this.y + Math.sin(this.cannonAng) * len * t;
-        if (Utils.distance(ppx, ppy, player.x, player.y) < player.radius + 16) {
-          player.takeDamage(this.damage * 1.5);
-        }
-        // 對建築
-        for (const b of game.buildings) {
-          if (!b.alive) continue;
-          const bx = b.x - this.x;
-          const by = b.y - this.y;
-          const bt = Utils.clamp((bx * Math.cos(this.cannonAng) + by * Math.sin(this.cannonAng)) / len, 0, 1);
-          const bpx = this.x + Math.cos(this.cannonAng) * len * bt;
-          const bpy = this.y + Math.sin(this.cannonAng) * len * bt;
-          if (Utils.distance(bpx, bpy, b.x, b.y) < Math.max(b.w, b.h) / 2 + 12) b.takeDamage(80);
+        // 三道扇形雷射,夾角 0.18(暴怒時 5 道)
+        const beamCount = this.enraged ? 5 : 3;
+        const len = 700;
+        for (let bi = -(beamCount - 1) / 2; bi <= (beamCount - 1) / 2; bi++) {
+          const ang = this.cannonAng + bi * 0.20;
+          const ex = this.x + Math.cos(ang) * len;
+          const ey = this.y + Math.sin(ang) * len;
+          game.particles.chainBolt(this.x, this.y, ex, ey, '#ffd86b');
+          game.particles.add({
+            x: ex, y: ey, vx: 0, vy: 0,
+            life: 0.3, max: 0.3, color: '#fff', size: 60, type: 'flash'
+          });
+          // 玩家點到線段
+          const px = player.x - this.x;
+          const py = player.y - this.y;
+          const t = Utils.clamp((px * Math.cos(ang) + py * Math.sin(ang)) / len, 0, 1);
+          const ppx = this.x + Math.cos(ang) * len * t;
+          const ppy = this.y + Math.sin(ang) * len * t;
+          if (Utils.distance(ppx, ppy, player.x, player.y) < player.radius + 18) {
+            player.takeDamage(this.damage * 1.4);
+          }
+          // 建築
+          for (const b of game.buildings) {
+            if (!b.alive) continue;
+            const bx = b.x - this.x;
+            const by = b.y - this.y;
+            const bt = Utils.clamp((bx * Math.cos(ang) + by * Math.sin(ang)) / len, 0, 1);
+            const bpx = this.x + Math.cos(ang) * len * bt;
+            const bpy = this.y + Math.sin(ang) * len * bt;
+            if (Utils.distance(bpx, bpy, b.x, b.y) < Math.max(b.w, b.h) / 2 + 12) b.takeDamage(80);
+          }
         }
         AudioMgr.lightning();
-        game.shake(8, 0.3);
+        AudioMgr.shockwave();
+        game.shake(12, 0.4);
       }
     } else {
       this.laserCooldown -= dt;
@@ -375,13 +570,75 @@ class Boss {
     }
     this.barrageCooldown -= dt;
     if (this.barrageCooldown <= 0) {
-      // 3 連射
-      for (let i = -1; i <= 1; i++) {
-        const ang = this.cannonAng + i * 0.2;
-        game.projectiles.push(new Projectile(this.x, this.y, ang, 460, this.damage * 0.7, 'enemy', 'arrow'));
+      // 6 方向螺旋彈幕
+      const dirs = this.enraged ? 8 : 6;
+      const spin = (performance.now() / 1000) % (Math.PI * 2);
+      for (let i = 0; i < dirs; i++) {
+        const ang = (i / dirs) * Math.PI * 2 + spin;
+        game.projectiles.push(new Projectile(this.x, this.y, ang, 360, this.damage * 0.65, 'enemy', 'bullet'));
       }
       AudioMgr.bowShoot();
-      this.barrageCooldown = this.enraged ? 2.5 : 4;
+      this.barrageCooldown = this.enraged ? 2.0 : 3.5;
+    }
+
+    // 新招:EMP 衝擊波 — 範圍 600 的全屏電擊
+    this.empCooldown -= dt;
+    if (this.empCooldown <= 0) {
+      Utils.bigToast('EMP 衝擊！');
+      // 蓄力 0.6 秒
+      const empRadius = 520;
+      game.particles.shockRing(this.x, this.y, 80, '#ffd86b');
+      game.particles.add({
+        x: this.x, y: this.y, vx: 0, vy: 0,
+        life: 0.6, max: 0.6, color: 'rgba(255,216,107,0.5)',
+        size: 120, type: 'flash'
+      });
+      game.schedule(0.6, () => {
+        if (!this.alive) return;
+        // 3 層擴張環
+        game.particles.shockRing(this.x, this.y, empRadius, '#ffd86b');
+        game.particles.shockRing(this.x, this.y, empRadius * 0.7, '#fff');
+        game.particles.shockRing(this.x, this.y, empRadius * 0.4, '#ffaa30');
+        game.particles.add({
+          x: this.x, y: this.y, vx: 0, vy: 0,
+          life: 0.45, max: 0.45, color: 'rgba(255,216,107,0.6)',
+          size: empRadius, type: 'flash'
+        });
+        // 八方雷霆折線
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const ex = this.x + Math.cos(a) * empRadius;
+          const ey = this.y + Math.sin(a) * empRadius;
+          game.particles.chainBolt(this.x, this.y, ex, ey, '#ffd86b');
+        }
+        // 玩家在範圍內傷害 + 減速
+        if (Utils.distance(this.x, this.y, player.x, player.y) < empRadius + player.radius) {
+          player.takeDamage(this.damage * 1.2);
+        }
+        AudioMgr.lightning();
+        AudioMgr.shockwave();
+        game.shake(18, 0.6);
+      });
+      this.empCooldown = this.enraged ? 7 : 13;
+    }
+
+    // 新招:導向飛彈群 — 5 顆延遲爆破彈
+    this.missileCooldown -= dt;
+    if (this.missileCooldown <= 0) {
+      Utils.toast('飛彈齊射！');
+      const n = this.enraged ? 7 : 5;
+      for (let i = 0; i < n; i++) {
+        game.schedule(i * 0.12, () => {
+          if (!this.alive) return;
+          const ang = Utils.angle(this.x, this.y, player.x, player.y) + Utils.jitter(0.5);
+          const proj = new Projectile(this.x, this.y, ang, 320, this.damage * 0.8, 'enemy', 'fireball');
+          game.projectiles.push(proj);
+          // 砲口火光
+          game.particles.muzzleFlash(this.x, this.y, ang, '#ffd86b');
+        });
+      }
+      AudioMgr.explosion();
+      this.missileCooldown = this.enraged ? 5 : 9;
     }
   }
 

@@ -59,6 +59,7 @@ class Game {
     this.scheduled = []; // 技能延遲事件
     this.healZones = []; // 法師生命之泉
     this.iceZones = [];  // 冰霜地面
+    this.darkZones = []; // Boss 暗影法師黑洞
 
     this.lastTime = performance.now();
     this.autoSaveTimer = 30;
@@ -142,7 +143,7 @@ class Game {
     this.waveManager = new WaveManager();
     this.timeOfDay = 0; this.day = 1; this.isNight = false;
     this.killCount = 0; this.score = 0; this.combo = 0;
-    this.scheduled = []; this.healZones = []; this.iceZones = [];
+    this.scheduled = []; this.healZones = []; this.iceZones = []; this.darkZones = [];
     this.particles.clear();
     this.quests = this.buildInitialQuests();
     this.spawnInitialResources();
@@ -303,6 +304,31 @@ class Game {
       z.life -= dt;
       if (z.life <= 0) { this.iceZones.splice(i, 1); continue; }
     }
+    // Boss 虛空黑洞:持續傷害 + 拉扯
+    if (this.darkZones) {
+      for (let i = this.darkZones.length - 1; i >= 0; i--) {
+        const z = this.darkZones[i];
+        z.life -= dt;
+        if (z.life <= 0) { this.darkZones.splice(i, 1); continue; }
+        const d = Utils.distance(z.x, z.y, this.player.x, this.player.y);
+        if (d < z.radius + this.player.radius) {
+          this.player.takeDamage(z.damage * dt);
+          // 拉扯
+          const a = Utils.angle(this.player.x, this.player.y, z.x, z.y);
+          this.player.x += Math.cos(a) * 60 * dt;
+          this.player.y += Math.sin(a) * 60 * dt;
+        }
+        // 環繞粒子
+        if (Math.random() < dt * 8) {
+          const a = Math.random() * Math.PI * 2;
+          this.particles.add({
+            x: z.x + Math.cos(a) * z.radius, y: z.y + Math.sin(a) * z.radius,
+            vx: -Math.cos(a) * 90, vy: -Math.sin(a) * 90,
+            life: 0.6, max: 0.6, color: '#b06aff', size: 3, type: 'spark'
+          });
+        }
+      }
+    }
 
     for (const e of this.enemies) e.update(dt, this);
     if (this.boss) this.boss.update(dt, this);
@@ -411,6 +437,33 @@ class Game {
     for (const e of this.enemies) e.draw(ctx, this.camera);
     if (this.boss) this.boss.draw(ctx, this.camera);
     this.player.draw(ctx, this.camera);
+    // Combo 光環:combo >= 8 後,玩家身上有金色光圈跟著心跳擴張
+    if (this.combo >= 8) {
+      const ps = Utils.worldToScreen(this.player.x, this.player.y, this.camera);
+      const t = performance.now() / 1000;
+      const pulse = (Math.sin(t * 6) + 1) * 0.5;
+      const tier = this.combo >= 30 ? 2 : this.combo >= 18 ? 1 : 0;
+      const color = tier === 2 ? '#ff4040' : tier === 1 ? '#ffaa30' : '#ffd86b';
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.6 + pulse * 0.3;
+      ctx.lineWidth = 2 + tier;
+      ctx.beginPath();
+      ctx.arc(ps.x, ps.y, this.player.radius + 16 + pulse * 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(ps.x, ps.y, this.player.radius + 24 + pulse * 10, 0, Math.PI * 2);
+      ctx.stroke();
+      // combo 數字浮在頭上
+      ctx.globalAlpha = 0.85 + pulse * 0.15;
+      ctx.font = `bold ${18 + tier * 4}px sans-serif`;
+      ctx.textAlign = 'center';
+      Utils.strokeText(ctx, `${this.combo} HIT!`, ps.x, ps.y - this.player.radius - 28, color, '#000', 3);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
     for (const p of this.projectiles) p.draw(ctx, this.camera);
     this.particles.draw(ctx, this.camera);
 

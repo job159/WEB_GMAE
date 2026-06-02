@@ -20,7 +20,16 @@ const ENEMY_TYPES = {
   spider:   { name: '毒蜘蛛',   hp: 55,  speed: 95,  damage: 8,  radius: 14, exp: 11, gold: 6,
               color: '#5a2a8a', dark: '#1a0a30', range: 'melee', poison: true },
   dark_mage:{ name: '黑暗法師', hp: 90,  speed: 50,  damage: 18, radius: 15, exp: 18, gold: 10,
-              color: '#3a2050', dark: '#1a0a20', range: 'ranged', attackRange: 340, projectileSpeed: 320, magic: true }
+              color: '#3a2050', dark: '#1a0a20', range: 'ranged', attackRange: 340, projectileSpeed: 320, magic: true },
+  // 精英變種
+  flame_ghost:  { name: '燃焰幽魂', hp: 80,  speed: 130, damage: 14, radius: 14, exp: 18, gold: 9,
+                  color: '#ff7030', dark: '#5a1010', range: 'melee', burnAura: true },
+  thunder_wolf: { name: '雷霆狼',   hp: 110, speed: 175, damage: 16, radius: 16, exp: 25, gold: 14,
+                  color: '#88aaff', dark: '#1a2050', range: 'melee', lightning: true },
+  venom_spider: { name: '毒蛛后',   hp: 140, speed: 90,  damage: 12, radius: 18, exp: 28, gold: 15,
+                  color: '#8a30c0', dark: '#2a0a40', range: 'melee', poison: true, splitOnDeath: true },
+  elite_troll:  { name: '黑岩巨魔', hp: 360, speed: 50,  damage: 30, radius: 26, exp: 55, gold: 28,
+                  color: '#3a3a3a', dark: '#101010', range: 'melee', wallDamage: 6, slamOnDeath: true }
 };
 
 class Enemy {
@@ -41,7 +50,8 @@ class Enemy {
     this.range = cfg.range;
     this.alive = true;
     this.attackCooldown = 0;
-    this.attackRate = type === 'troll' ? 1.4 : (type === 'imp' ? 0.6 : 0.9);
+    this.attackRate = type === 'troll' || type === 'elite_troll' ? 1.4 : (type === 'imp' || type === 'thunder_wolf' ? 0.55 : 0.85);
+    this.elite = type === 'flame_ghost' || type === 'thunder_wolf' || type === 'venom_spider' || type === 'elite_troll';
     this.slowTimer = 0;
     this.frozenTimer = 0;
     this.burnTimer = 0;
@@ -82,6 +92,39 @@ class Enemy {
       game.particles.spark(this.x, this.y, 6, '#ff6666');
       game.particles.damageText(this.x, this.y - 16, `+${gold}g`, '#ffd86b');
       AudioMgr.enemyDie();
+      // 精英死亡爆閃
+      if (this.elite) {
+        game.particles.explosion(this.x, this.y, 60);
+        game.shake(3, 0.12);
+      }
+      // 燃焰幽魂死亡自爆
+      if (this.type === 'flame_ghost') {
+        game.particles.explosion(this.x, this.y, 90);
+        game.particles.shockRing(this.x, this.y, 110, '#ff5020');
+        if (Utils.distance(this.x, this.y, game.player.x, game.player.y) < 100 + game.player.radius) {
+          game.player.takeDamage(this.damage * 0.6);
+        }
+        game.shake(5, 0.2);
+        AudioMgr.explosion();
+      }
+      // 毒蛛后:分裂成 2 隻小蜘蛛
+      if (this.type === 'venom_spider') {
+        for (let i = 0; i < 2; i++) {
+          const a = Math.random() * Math.PI * 2;
+          game.enemies.push(new Enemy('spider', this.x + Math.cos(a) * 20, this.y + Math.sin(a) * 20, 0.8));
+        }
+        game.particles.shockRing(this.x, this.y, 60, '#8a30c0');
+      }
+      // 黑岩巨魔:死亡時範圍砸地
+      if (this.type === 'elite_troll') {
+        game.particles.shockRing(this.x, this.y, 160, '#3a3a3a');
+        game.particles.explosion(this.x, this.y, 130);
+        if (Utils.distance(this.x, this.y, game.player.x, game.player.y) < 160 + game.player.radius) {
+          game.player.takeDamage(this.damage * 0.8);
+        }
+        game.shake(10, 0.4);
+        AudioMgr.explosion();
+      }
     }
   }
 
@@ -137,6 +180,32 @@ class Enemy {
       this.y += this.knockVY * dt;
       this.knockTimer -= dt;
       return;
+    }
+
+    // 精英怪光環/拖尾
+    if (this.type === 'flame_ghost' && Math.random() < dt * 14) {
+      game.particles.add({
+        x: this.x + Utils.jitter(this.radius), y: this.y + Utils.jitter(this.radius),
+        vx: Utils.jitter(20), vy: -Utils.randomRange(30, 80),
+        life: 0.5, max: 0.5, color: Utils.pick(['#ff5020', '#ff8030', '#ffaa33']),
+        size: Utils.randomRange(3, 6), type: 'fire', grow: -5
+      });
+    }
+    if (this.type === 'thunder_wolf' && Math.random() < dt * 10) {
+      // 雷霆拖尾
+      game.particles.add({
+        x: this.x + Utils.jitter(this.radius), y: this.y + Utils.jitter(this.radius),
+        vx: 0, vy: 0, life: 0.18, max: 0.18,
+        color: '#bbeaff', size: 4, type: 'spark'
+      });
+    }
+    if (this.type === 'venom_spider' && Math.random() < dt * 12) {
+      game.particles.add({
+        x: this.x + Utils.jitter(this.radius), y: this.y + Utils.jitter(this.radius),
+        vx: Utils.jitter(15), vy: Utils.jitter(15),
+        life: 0.6, max: 0.6, color: '#8a30c0',
+        size: 3, type: 'spark'
+      });
     }
 
     const player = game.player;
@@ -357,6 +426,100 @@ class Enemy {
       ctx.fillStyle = '#f0f';
       ctx.fillRect(s.x - 5, s.y - 3, 2, 2);
       ctx.fillRect(s.x + 3, s.y - 3, 2, 2);
+    } else if (this.type === 'flame_ghost') {
+      // 火光環
+      Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 10, '#ff5020', 0.8);
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(s.x, s.y + bob * 0.4, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 火焰王冠
+      ctx.fillStyle = '#ffaa33';
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i - 2) * 0.25;
+        ctx.beginPath();
+        ctx.moveTo(s.x + Math.cos(a - 0.1) * this.radius, s.y + Math.sin(a - 0.1) * this.radius);
+        ctx.lineTo(s.x + Math.cos(a) * (this.radius + 8 + Math.sin(this.wobble * 4) * 2),
+                   s.y + Math.sin(a) * (this.radius + 8));
+        ctx.lineTo(s.x + Math.cos(a + 0.1) * this.radius, s.y + Math.sin(a + 0.1) * this.radius);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = '#ff0';
+      ctx.fillRect(s.x - 5, s.y - 3, 3, 3);
+      ctx.fillRect(s.x + 2, s.y - 3, 3, 3);
+    } else if (this.type === 'thunder_wolf') {
+      // 雷光環
+      Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 8, '#88aaff', 0.7);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y + bob * 0.3, this.radius, this.radius * 0.75, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      // 兩耳
+      ctx.fillStyle = this.dark;
+      ctx.fillRect(s.x - this.radius + 2, s.y - this.radius * 0.7 - 4, 4, 5);
+      ctx.fillRect(s.x + this.radius - 6, s.y - this.radius * 0.7 - 4, 4, 5);
+      // 電光眼
+      ctx.fillStyle = '#bbeaff';
+      ctx.shadowColor = '#88aaff'; ctx.shadowBlur = 6;
+      ctx.fillRect(s.x - 6, s.y - 2, 3, 3);
+      ctx.fillRect(s.x + 3, s.y - 2, 3, 3);
+      ctx.shadowBlur = 0;
+    } else if (this.type === 'venom_spider') {
+      // 紫色毒光環
+      Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 10, '#8a30c0', 0.7);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, this.radius, this.radius * 0.8, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      // 8 腳
+      ctx.strokeStyle = this.dark; ctx.lineWidth = 2;
+      const legBob = Math.sin(this.wobble * 2) * 3;
+      for (let i = 0; i < 4; i++) {
+        const yOff = -8 + i * 5;
+        ctx.beginPath();
+        ctx.moveTo(s.x - this.radius, s.y + yOff);
+        ctx.lineTo(s.x - this.radius - 12, s.y + yOff + legBob);
+        ctx.moveTo(s.x + this.radius, s.y + yOff);
+        ctx.lineTo(s.x + this.radius + 12, s.y + yOff - legBob);
+        ctx.stroke();
+      }
+      // 王冠
+      ctx.fillStyle = '#dca6ff';
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i - 1) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(s.x + Math.cos(a - 0.1) * this.radius, s.y + Math.sin(a - 0.1) * this.radius);
+        ctx.lineTo(s.x + Math.cos(a) * (this.radius + 6), s.y + Math.sin(a) * (this.radius + 6));
+        ctx.lineTo(s.x + Math.cos(a + 0.1) * this.radius, s.y + Math.sin(a + 0.1) * this.radius);
+        ctx.closePath(); ctx.fill();
+      }
+      // 紫眼
+      ctx.fillStyle = '#ff44ff';
+      ctx.fillRect(s.x - 6, s.y - 3, 3, 3);
+      ctx.fillRect(s.x + 3, s.y - 3, 3, 3);
+    } else if (this.type === 'elite_troll') {
+      // 黑光環
+      Utils.drawGlowCircle(ctx, s.x, s.y, this.radius + 12, '#3a3a3a', 0.7);
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(s.x, s.y + bob * 0.4, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 巨大獠牙
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(s.x - 8, s.y + 6, 5, 12);
+      ctx.fillRect(s.x + 3, s.y + 6, 5, 12);
+      // 紅眼
+      ctx.fillStyle = '#ff2030';
+      ctx.shadowColor = '#ff2030'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(s.x - 9, s.y - 6, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x + 9, s.y - 6, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      // 肩刺
+      ctx.fillStyle = this.dark;
+      for (let i = 0; i < 4; i++) {
+        const a = -Math.PI / 2 + (i - 1.5) * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(s.x + Math.cos(a - 0.1) * this.radius, s.y + Math.sin(a - 0.1) * this.radius);
+        ctx.lineTo(s.x + Math.cos(a) * (this.radius + 10), s.y + Math.sin(a) * (this.radius + 10));
+        ctx.lineTo(s.x + Math.cos(a + 0.1) * this.radius, s.y + Math.sin(a + 0.1) * this.radius);
+        ctx.closePath(); ctx.fill();
+      }
     } else if (this.type === 'dark_mage') {
       // 法袍
       ctx.fillStyle = fill;

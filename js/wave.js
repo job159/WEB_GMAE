@@ -10,7 +10,7 @@ class WaveManager {
     this.timer = 12;
     this.prepareTime = 12;
     this.spawnQueue = [];
-    this.spawnInterval = 0.7;
+    this.spawnInterval = 0.45;
     this.spawnTimer = 0;
     this.bossSpawned = false;
     this.cardOffered = false;  // 此波結束後是否還沒給過卡牌
@@ -25,9 +25,9 @@ class WaveManager {
     this.cardOffered = false;
     game.stats.startWave();
 
-    const count = 5 + (this.current - 1) * 3;
-    const ng = game.stats.mode === 'ngplus' ? 1.3 : 1;
-    const scale = (1 + (this.current - 1) * 0.12) * ng;
+    const count = 8 + (this.current - 1) * 4;
+    const ng = game.stats.mode === 'ngplus' ? 1.4 : 1;
+    const scale = (1 + (this.current - 1) * 0.14) * ng;
 
     const pool = ['slime'];
     if (this.current >= 2) pool.push('wolf');
@@ -36,12 +36,17 @@ class WaveManager {
     if (this.current >= 5) pool.push('spider');
     if (this.current >= 6) pool.push('troll');
     if (this.current >= 7) pool.push('dark_mage');
+    // 高波數加入精英怪
+    if (this.current >= 6) pool.push('flame_ghost');
+    if (this.current >= 8) pool.push('thunder_wolf');
+    if (this.current >= 9) pool.push('venom_spider');
+    if (this.current >= 11) pool.push('elite_troll');
 
     for (let i = 0; i < count; i++) {
       this.spawnQueue.push({ type: Utils.pick(pool), scale });
     }
     if (this.isBossWave(this.current)) {
-      this.spawnQueue = this.spawnQueue.slice(0, Math.ceil(count / 2));
+      this.spawnQueue = this.spawnQueue.slice(0, Math.ceil(count * 0.65));
     }
     this.spawnTimer = 0.8;
     Utils.bigToast(`第 ${this.current} 波`);
@@ -120,9 +125,31 @@ class WaveManager {
       this.bossSpawned = true;
       Utils.bigToast(`${game.boss.name} 出現！`);
       AudioMgr.bossSpawn();
-      game.shake(10, 0.6);
-      game.particles.shockRing(pos.x, pos.y, 140, '#ff5050');
-      game.particles.spark(pos.x, pos.y, 40, '#ff8050');
+      // 震屏 + 多層紅黑爆閃
+      game.shake(22, 0.9);
+      game.particles.add({
+        x: pos.x, y: pos.y, vx: 0, vy: 0,
+        life: 0.7, max: 0.7, color: 'rgba(0,0,0,0.65)',
+        size: 600, type: 'flash'
+      });
+      game.particles.shockRing(pos.x, pos.y, 460, '#ff2030');
+      game.particles.shockRing(pos.x, pos.y, 340, '#ff7050');
+      game.particles.shockRing(pos.x, pos.y, 220, '#ffd86b');
+      game.particles.shockRing(pos.x, pos.y, 120, '#fff');
+      // 血爆四射
+      for (let i = 0; i < 56; i++) {
+        const a = (i / 56) * Math.PI * 2;
+        const sp = Utils.randomRange(240, 520);
+        game.particles.add({
+          x: pos.x, y: pos.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: 1.2, max: 1.2, color: Utils.pick(['#ff2030', '#ff7050', '#ffd86b', '#fff']),
+          size: Utils.randomRange(5, 10), type: 'fire', grow: -5
+        });
+      }
+      // 黑色從天降下塵土
+      game.particles.smoke(pos.x, pos.y, 40, 'rgba(20,5,10,0.85)');
+      // 玩家所在位置也加震屏
+      game.particles.spark(game.player.x, game.player.y, 24, '#ff8050');
     }
     const enemiesAlive = game.enemies.some(e => e.alive);
     const bossAlive = game.boss && game.boss.alive;
