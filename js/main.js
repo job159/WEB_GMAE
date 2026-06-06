@@ -29,10 +29,13 @@ const App = {
     UI.refreshSkillNames(classId);
   },
 
-  loadSlot(slot) {
-    this.game.startNewRun('warrior', 'normal');
-    Save.load(this.game, slot);
+  async loadSlot(slot) {
+    this.game.startNewRun(CLASS_LIST[0], 'normal', null, true); // 用有效職業當暫時鷹架,quiet 不顯示出發字
+    this.game.state = 'loading';            // 載入期間暫停邏輯,避免邊載入邊跑而當掉
+    const ok = await Save.load(this.game, slot);  // 等存檔真的套用完(含職業外型)
+    if (!ok) { this.go('menu'); return; }   // 讀檔失敗就回主選單,不要卡在半套狀態
     UI.refreshSkillNames(this.game.player.classId);
+    if (UI.refreshWeaponSlots) UI.refreshWeaponSlots(this.game.player.classId);
     this.game.state = 'playing';
     UI.hideAllOverlays();
   }

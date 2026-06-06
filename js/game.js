@@ -125,7 +125,8 @@ class Game {
   }
 
   // 用 classId 與 mode 開始新局
-  startNewRun(classId = 'warrior', mode = 'normal', seed = null) {
+  startNewRun(classId = 'warrior', mode = 'normal', seed = null, quiet = false) {
+    if (!CHAR_CLASSES[classId]) classId = CLASS_LIST[0];   // 防呆:無效職業(如已移除的 'warrior')→ 用預設職業,避免崩潰
     if (mode === 'daily') {
       const t = PRNG.todaySeed();
       seed = t.seed;
@@ -164,7 +165,7 @@ class Game {
     this.uiBuildOpen = this.uiSkillOpen = this.uiShopOpen = this.uiCardOpen = false;
     UI.hideAllOverlays();
     this.state = 'playing';
-    Utils.bigToast(CHAR_CLASSES[classId].name + ' 出發！');
+    if (!quiet) Utils.bigToast(CHAR_CLASSES[classId].name + ' 出發！');
   }
 
   pause() { if (this.state !== 'playing') return; this.state = 'paused'; UI.showPause(true); }
@@ -246,8 +247,9 @@ class Game {
     const dt = Math.min(dtRaw, 0.05);
     if (typeof Touch !== 'undefined' && Touch.enabled) Touch.feedInput();
     Input.updateMouseWorld(this.camera);
-    if (this.state === 'playing') this.update(dt);
-    this.render();
+    // 包 try/catch:單一例外不會讓整個遊戲卡死(rAF 一定會重新排程)
+    try { if (this.state === 'playing') this.update(dt); } catch (e) { console.error('[update]', e); }
+    try { this.render(); } catch (e) { console.error('[render]', e); }
     Input.endFrame();
     requestAnimationFrame((t) => this.loop(t));
   }

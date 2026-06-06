@@ -127,11 +127,17 @@ const Save = {
     return this.save(game, 0);
   },
 
-  // 對外的 load 介面：優先雲端，雲端沒有再退回本地
+  // 對外的 load 介面：優先雲端，雲端沒有/逾時再退回本地
   async load(game, slot = 1) {
     if (typeof Cloud !== 'undefined' && Cloud.user) {
-      const ok = await Cloud.loadFromCloud(slot, game);
-      if (ok) { Utils.toast(`雲端讀檔 ${slot}`); AudioMgr.click(); return true; }
+      try {
+        // 雲端讀取最多等 5 秒，逾時就退回本地，避免網路卡住時整個遊戲卡在「載入中」
+        const ok = await Promise.race([
+          Cloud.loadFromCloud(slot, game),
+          new Promise(res => setTimeout(() => res(null), 5000))
+        ]);
+        if (ok) { Utils.toast(`雲端讀檔 ${slot}`); AudioMgr.click(); return true; }
+      } catch (e) { console.warn('[Save] 雲端讀檔失敗，改用本地', e); }
     }
     return this.loadLocal(game, slot);
   },
@@ -158,6 +164,10 @@ const Save = {
   },
 
   applyToGame(game, data) {
+    // 先依存檔職業套用「外型 + classMods + 基礎屬性」,再用存檔數值覆蓋
+    if (data.player?.classId && game.player.applyClass) {
+      game.player.applyClass(data.player.classId);
+    }
     Object.assign(game.player, data.player);
     if (data.player.classId) game.player.classId = data.player.classId;
     game.player.unlockedWeapons = data.player.unlockedWeapons || ['axe', 'sword', 'bow'];
@@ -170,7 +180,7 @@ const Save = {
     }
     game.skills.applyAll(game.player);
 
-    game.buildings = data.buildings.map(b => new Building(b.type, b.x, b.y, b.hp));
+    game.buildings = (data.buildings || []).map(b => new Building(b.type, b.x, b.y, b.hp));
     game.mut = data.mutations || {};
 
     game.waveManager.current = data.wave || 1;
