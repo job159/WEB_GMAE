@@ -487,6 +487,35 @@ body.colorblind .red { color: #ffaa33 !important; }
 }
 .cloud-btn:hover { background: linear-gradient(180deg, #5a5a5a, #3a3a3a) !important; }
 
+/* ===== 匿名輸入名字 ===== */
+#name-modal { z-index: 300; }
+.name-box {
+  background: linear-gradient(180deg, rgba(20,22,30,0.98), rgba(10,12,18,0.98));
+  border: 2px solid #ffd86b;
+  border-radius: 14px;
+  padding: 30px 36px;
+  max-width: 440px;
+  box-shadow: 0 0 50px rgba(255,216,107,0.3), 0 0 90px rgba(0,0,0,0.7);
+}
+.name-box h2 { font-size: 26px; margin-bottom: 12px; text-shadow: 0 0 12px rgba(255,216,107,0.5); }
+.name-box p { font-size: 14px; color: #ccc; margin: 6px 0; line-height: 1.5; }
+.name-box p.small { font-size: 11px; color: #888; margin-top: 16px; }
+#name-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 18px 0 4px;
+  padding: 12px 14px;
+  font-size: 18px;
+  text-align: center;
+  background: #14161e;
+  color: #ffd86b;
+  border: 2px solid #6f5a20;
+  border-radius: 8px;
+  outline: none;
+  letter-spacing: 2px;
+}
+#name-input:focus { border-color: #ffd86b; box-shadow: 0 0 14px rgba(255,216,107,0.4); }
+
 /* ===== 排行榜 ===== */
 .tab-bar {
   display: flex;

@@ -6,7 +6,7 @@
 - 🎴 Roguelike 卡牌系統（含技能升級）
 - 🐉 3 種誇張造型 Boss
 - ☁ 雲端存檔 + 排行榜 + 成就同步
-- 👤 匿名 / Discord / Google 三種登入
+- 👤 匿名（輸入名字找存檔）/ Discord / Google 三種登入
 - 📱 觸控操作 + PWA
 
 線上版：https://job159.github.io/WEB_GMAE/
@@ -17,57 +17,20 @@
 
 雲端功能依賴 Supabase。請在 Dashboard 完成以下 4 步驟，否則登入會失敗：
 
-### Step 1：在 SQL Editor 跑這段建表 + RLS
+### Step 1：在 SQL Editor 跑建表 + RLS
 
-```sql
-create table profiles (
-  id uuid primary key references auth.users on delete cascade,
-  display_name text not null,
-  created_at timestamptz default now()
-);
-create table saves (
-  user_id uuid not null references auth.users on delete cascade,
-  slot smallint not null check (slot >= 0 and slot <= 3),
-  data jsonb not null,
-  wave int, level int, class_id text, score int, mode text,
-  updated_at timestamptz default now(),
-  primary key (user_id, slot)
-);
-create table scores (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users on delete cascade,
-  display_name text not null,
-  score int not null check (score >= 0 and score < 10000000),
-  wave int not null check (wave between 1 and 15),
-  class_id text not null,
-  mode text not null check (mode in ('normal','daily','ngplus')),
-  daily_seed text,
-  duration_sec int,
-  created_at timestamptz default now()
-);
-create index scores_score_idx on scores (score desc);
-create index scores_daily_idx on scores (daily_seed, score desc);
-create table achievements (
-  user_id uuid not null references auth.users on delete cascade,
-  achievement_id text not null,
-  unlocked_at timestamptz default now(),
-  primary key (user_id, achievement_id)
-);
+把 [`sql/supabase_setup.sql`](sql/supabase_setup.sql) 整段貼進 **SQL Editor → Run** 即可。
+（已部署過舊版的，改跑 [`sql/migration_name_based.sql`](sql/migration_name_based.sql) 升級。）
 
-alter table profiles enable row level security;
-alter table saves enable row level security;
-alter table scores enable row level security;
-alter table achievements enable row level security;
+建立的表：
 
-create policy "read all profiles" on profiles for select using (true);
-create policy "upsert own profile" on profiles for insert with check (auth.uid() = id);
-create policy "update own profile" on profiles for update using (auth.uid() = id);
-create policy "all own saves" on saves for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "read all scores" on scores for select using (true);
-create policy "insert own scores" on scores for insert with check (auth.uid() = user_id);
-create policy "read own achievements" on achievements for select using (auth.uid() = user_id);
-create policy "insert own achievements" on achievements for insert with check (auth.uid() = user_id);
-```
+| 表 | 主鍵 | 說明 |
+|----|------|------|
+| `profiles` | `id`(user_id) | 玩家檔案 |
+| `saves` | `(player_name, slot)` | **存檔以名字為主鍵 → 用名字找回** |
+| `scores` | `id` | 排行榜 |
+| `achievements` | `(user_id, achievement_id)` | 成就 |
+| `login_log` | `id` | **誰、什麼時間、用什麼方式登入（可匯出 CSV）** |
 
 ### Step 2：啟用 Anonymous Sign-Ins
 
@@ -122,12 +85,25 @@ create policy "insert own achievements" on achievements for insert with check (a
 
 ## 雲端機制（重點）
 
-- 啟動時**自動匿名登入**，立即可用雲端
-- 存檔同時寫 localStorage + Supabase（背景，失敗不影響）
-- 讀檔優先雲端，斷網時退回本地
-- 通關自動上傳分數到排行榜
-- 解成就自動同步雲端
-- 登入 Discord / Google 後跨裝置同步
+- 啟動時**自動匿名登入**；不是 Discord / Google 登入時，主選單會跳出**輸入名字**
+- 匿名玩家的**存檔以「名字 + 槽位」存到雲端** → 換裝置輸入同一個名字就能找回
+- 存檔同時寫 localStorage + Supabase（背景，失敗不影響）；讀檔優先雲端，斷網退回本地
+- 每次登入會寫一筆 `login_log`（名字 / 時間 / 方式）
+- 通關自動上傳分數到排行榜；解成就自動同步雲端
+- 登入 Discord / Google 後跨裝置同步，且存檔私有不會被同名覆蓋
+
+> ⚠ **name-only 的取捨**：匿名存檔只用名字當鑰匙，代表**知道名字的人就能讀／覆蓋該存檔**（兩個都叫「小明」會共用）。
+> casual 遊戲可接受；要更嚴格可加 4 位數 PIN（見 `sql/supabase_setup.sql` 檔尾說明），或直接用 Discord / Google 登入。
+
+## 匯出登入紀錄 CSV
+
+想看「哪個匿名玩家、什麼時間登入」：
+
+1. Supabase Dashboard → **SQL Editor**
+2. 貼上 [`sql/export_logins.sql`](sql/export_logins.sql) → **Run**
+3. 結果區右上角 **Download CSV**
+
+（或 **Table Editor → `login_log` → Export → Export as CSV** 直接匯出整張表。）
 
 ## 部署
 

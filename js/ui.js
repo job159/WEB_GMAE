@@ -55,30 +55,70 @@ const UI = {
   // ===== 雲端登入狀態列 =====
   refreshCloudStatus(user, profile) {
     const el = this.el.cloudStatus;
-    if (!el) return;
-    if (!user) {
-      el.textContent = '未連線（僅本地存檔）';
-      el.classList.remove('online', 'anon');
-      this.el.btnLoginDiscord?.classList.remove('hidden');
-      this.el.btnLoginGoogle?.classList.remove('hidden');
-      this.el.btnLogout?.classList.add('hidden');
-      this.el.btnRename?.classList.add('hidden');
-    } else if (user.is_anonymous) {
-      el.textContent = `匿名玩家（雲端已啟用）— 登入可跨裝置同步`;
-      el.classList.add('online'); el.classList.add('anon');
-      this.el.btnLoginDiscord?.classList.remove('hidden');
-      this.el.btnLoginGoogle?.classList.remove('hidden');
-      this.el.btnLogout?.classList.add('hidden');
-      this.el.btnRename?.classList.remove('hidden');
-    } else {
-      const name = profile?.display_name || user.email?.split('@')[0] || '玩家';
-      el.textContent = `已登入：${name}`;
-      el.classList.add('online'); el.classList.remove('anon');
-      this.el.btnLoginDiscord?.classList.add('hidden');
-      this.el.btnLoginGoogle?.classList.add('hidden');
-      this.el.btnLogout?.classList.remove('hidden');
-      this.el.btnRename?.classList.remove('hidden');
+    if (el) {
+      if (!user) {
+        el.textContent = '未連線（僅本地存檔）';
+        el.classList.remove('online', 'anon');
+        this.el.btnLoginDiscord?.classList.remove('hidden');
+        this.el.btnLoginGoogle?.classList.remove('hidden');
+        this.el.btnLogout?.classList.add('hidden');
+        this.el.btnRename?.classList.add('hidden');
+      } else if (user.is_anonymous) {
+        const nm = (typeof Cloud !== 'undefined' && Cloud.playerName) || profile?.display_name;
+        el.textContent = nm ? `匿名玩家：${nm}（雲端已啟用）` : '匿名玩家（請先輸入名字）';
+        el.classList.add('online'); el.classList.add('anon');
+        this.el.btnLoginDiscord?.classList.remove('hidden');
+        this.el.btnLoginGoogle?.classList.remove('hidden');
+        this.el.btnLogout?.classList.add('hidden');
+        this.el.btnRename?.classList.remove('hidden');
+      } else {
+        const name = profile?.display_name || user.email?.split('@')[0] || '玩家';
+        el.textContent = `已登入：${name}`;
+        el.classList.add('online'); el.classList.remove('anon');
+        this.el.btnLoginDiscord?.classList.add('hidden');
+        this.el.btnLoginGoogle?.classList.add('hidden');
+        this.el.btnLogout?.classList.remove('hidden');
+        this.el.btnRename?.classList.remove('hidden');
+      }
     }
+    // 匿名但還沒名字 → 在主選單跳出輸入框
+    this.maybeAskName();
+  },
+
+  // 若是匿名玩家且還沒輸入名字，在主選單跳出輸入框
+  maybeAskName() {
+    if (typeof App === 'undefined' || App.state !== 'menu') return;
+    if (typeof Cloud === 'undefined' || !Cloud.needsName || !Cloud.needsName()) return;
+    if (this._namePromptOpen) return;
+    this.askPlayerName(Cloud.playerName || '');
+  },
+
+  // 顯示「輸入名字」對話框，確認後寫入 Cloud；回傳 Promise<name|null>
+  askPlayerName(prefill = '') {
+    const modal = document.getElementById('name-modal');
+    const input = document.getElementById('name-input');
+    const btn = document.getElementById('name-confirm');
+    if (!modal || !input || !btn) return Promise.resolve(null);
+    this._namePromptOpen = true;
+    input.value = prefill || '';
+    modal.classList.remove('hidden');
+    setTimeout(() => input.focus(), 50);
+    return new Promise(resolve => {
+      const onKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+      const submit = async () => {
+        const v = input.value.trim();
+        if (!v) { input.focus(); return; }
+        btn.removeEventListener('click', submit);
+        input.removeEventListener('keydown', onKey);
+        modal.classList.add('hidden');
+        this._namePromptOpen = false;
+        AudioMgr.click();
+        if (typeof Cloud !== 'undefined' && Cloud.setPlayerName) await Cloud.setPlayerName(v);
+        resolve(v);
+      };
+      btn.addEventListener('click', submit);
+      input.addEventListener('keydown', onKey);
+    });
   },
 
   // ===== 排行榜 =====
@@ -331,7 +371,7 @@ const UI = {
   // ===== 主選單 / 子畫面 =====
   showMainMenu(show) {
     this.el.mainMenu?.classList.toggle('hidden', !show);
-    if (show) this.updateMainMenuButtons();
+    if (show) { this.updateMainMenuButtons(); this.maybeAskName(); }
   },
   updateMainMenuButtons() {
     const btnContinue = document.getElementById('btn-continue');

@@ -91,12 +91,10 @@ window.addEventListener('DOMContentLoaded', () => {
     Utils.toast('已登出，切回匿名');
   });
   $on('btn-rename', 'click', async () => {
-    const cur = Cloud.profile?.display_name || '';
-    const name = prompt('新的顯示名稱（最多 20 字元）：', cur);
-    if (!name) return;
-    const ok = await Cloud.updateDisplayName(name.trim());
-    if (ok) Utils.toast('改名成功');
-    else Utils.toast('改名失敗');
+    AudioMgr.click();
+    const cur = Cloud.playerName || Cloud.profile?.display_name || '';
+    const name = await UI.askPlayerName(cur);
+    if (name) Utils.toast('名字已更新：' + name);
   });
 
   // 返回按鈕
