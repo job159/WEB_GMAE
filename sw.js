@@ -1,5 +1,5 @@
 /* Service Worker — 離線快取(network-first,確保新版自動上線) */
-const CACHE = 'survival-outpost-v8';
+const CACHE = 'survival-outpost-v9';
 const FILES = [
   './',
   './index.html',
@@ -10,7 +10,7 @@ const FILES = [
   './js/card.js', './js/achievement.js', './js/save.js', './js/weapon.js',
   './js/skill.js', './js/projectile.js', './js/resource.js', './js/building.js',
   './js/enemy.js', './js/boss.js', './js/wave.js', './js/player.js',
-  './js/shop.js', './js/touch.js', './js/ui.js', './js/game.js', './js/main.js'
+  './js/shop.js', './js/touch.js', './js/cloud.js', './js/ui.js', './js/game.js', './js/main.js'
 ];
 
 self.addEventListener('install', e => {
