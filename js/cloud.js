@@ -19,11 +19,14 @@ const Cloud = {
 
   // ===== 初始化（main.js 啟動時呼叫）=====
   init() {
+    try { this.playerName = localStorage.getItem(this.NAME_KEY) || null; } catch (e) {}
     if (typeof supabase === 'undefined') {
-      console.warn('[Cloud] Supabase script 未載入，雲端功能關閉');
+      // SDK 沒載入（離線 / CDN 被擋）→ 純本地模式，但仍要讓玩家輸入名字
+      console.warn('[Cloud] Supabase script 未載入，改為純本地（仍可輸入名字）');
+      this.ready = true;
+      UI.refreshCloudStatus?.(null, null);
       return;
     }
-    try { this.playerName = localStorage.getItem(this.NAME_KEY) || null; } catch (e) {}
     try {
       this.client = supabase.createClient(this.URL, this.KEY, {
         auth: { persistSession: true, autoRefreshToken: true }
@@ -54,6 +57,8 @@ const Cloud = {
       });
     } catch (e) {
       console.warn('[Cloud] init 失敗：', e);
+      this.ready = true;
+      UI.refreshCloudStatus?.(null, null);
     }
   },
 
@@ -89,9 +94,11 @@ const Cloud = {
     return this.playerName || `Guest_${this.user.id.slice(0, 6)}`;
   },
 
-  // 匿名是否還沒輸入名字（UI 用來決定要不要跳輸入框）
+  // 是否還沒輸入名字（UI 用來決定要不要跳輸入框）
+  // 注意：不依賴雲端是否連上 —— 連不上也要讓玩家輸入名字（純本地身分），雲端是 best-effort
   needsName() {
-    return this.ready && this.isAnonymous() && !this.playerName;
+    if (this.user && !this.user.is_anonymous) return false; // 已用 Discord / Google 登入
+    return this.ready && !this.playerName;
   },
 
   // 建立 / 更新 profile
@@ -120,6 +127,8 @@ const Cloud = {
     if (!name) return false;
     this.playerName = name;
     try { localStorage.setItem(this.NAME_KEY, name); } catch (e) {}
+    // 雲端還沒連上 → 趁機重試一次匿名登入，連上後就能同步雲端
+    if (this.client && !this.user) { try { await this.signInAnon(); } catch (e) {} }
     await this.updateDisplayName(name);
     // 第一次取得名字時補記一筆登入（_sessionLogged 防重複）
     await this.logLogin(this.isAnonymous() ? 'anonymous' : (this.user?.app_metadata?.provider || 'oauth'));

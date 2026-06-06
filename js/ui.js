@@ -57,12 +57,13 @@ const UI = {
     const el = this.el.cloudStatus;
     if (el) {
       if (!user) {
-        el.textContent = '未連線（僅本地存檔）';
+        const nm = (typeof Cloud !== 'undefined' && Cloud.playerName);
+        el.textContent = nm ? `${nm}（未連線，僅本地存檔）` : '未連線（僅本地存檔）';
         el.classList.remove('online', 'anon');
         this.el.btnLoginDiscord?.classList.remove('hidden');
         this.el.btnLoginGoogle?.classList.remove('hidden');
         this.el.btnLogout?.classList.add('hidden');
-        this.el.btnRename?.classList.add('hidden');
+        this.el.btnRename?.classList.toggle('hidden', !nm);
       } else if (user.is_anonymous) {
         const nm = (typeof Cloud !== 'undefined' && Cloud.playerName) || profile?.display_name;
         el.textContent = nm ? `匿名玩家：${nm}（雲端已啟用）` : '匿名玩家（請先輸入名字）';
