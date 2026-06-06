@@ -191,10 +191,26 @@ window.addEventListener('DOMContentLoaded', () => {
   game.lastTime = performance.now();
   requestAnimationFrame((t) => game.loop(t));
 
-  // 註冊 Service Worker（PWA）
+  // 註冊 Service Worker（PWA）— 自動更新：偵測到新版就自己重新整理，玩家不用再手動清快取
   if ('serviceWorker' in navigator) {
+    let swReloading = false;
+    const hadController = !!navigator.serviceWorker.controller; // 第一次安裝時為 false → 不重整
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (swReloading || !hadController) return;
+      swReloading = true;
+      window.location.reload();
+    });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // updateViaCache:'none' → 永遠用網路檢查 sw.js,不吃 HTTP 快取,才抓得到新版
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then(reg => {
+          reg.update();
+          // 回到分頁時再檢查一次有沒有新版
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+        })
+        .catch(() => {});
     });
   }
 });
